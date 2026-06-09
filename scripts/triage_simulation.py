@@ -3,7 +3,7 @@ Triage Simulation — Protocol-SIFT-Async-Bridge
 ===============================================
 
 Simulates a complete LLM-driven incident response session against the
-MCP server.  subprocess.run is patched with realistic Volatility output
+MCP server.  subprocess.Popen is patched with realistic Volatility output
 so the full async pipeline runs without a live memory image.
 
 Captures every JSON-RPC frame (initialize, tools/list, tools/call request
@@ -45,6 +45,9 @@ os.environ["VOL3_BIN"] = "vol"
 os.environ["MAX_OUTPUT_LINES"] = "120"
 os.environ["PLUGIN_TIMEOUT_SECS"] = "180"
 os.environ["MAX_WORKERS"] = "4"
+os.environ["MAX_CONCURRENT_FORENSIC_JOBS"] = "2"
+os.environ["PROCESS_MEM_LIMIT_MB"] = "512"
+os.environ["SIFT_BRIDGE_STORAGE"] = "/tmp/sift_bridge_runtime"
 
 import server.mcp_vol_server as server_mod  # noqa: E402  (env must be set first)
 
@@ -96,6 +99,15 @@ def _emit_frame(frame: dict[str, Any]) -> None:
         fh.write(json.dumps(frame) + "\n")
 
 
+def _fake_popen(stdout: str, returncode: int = 0, stderr: str = "") -> MagicMock:
+    """Build a Popen mock whose communicate() returns the given outputs."""
+    proc = MagicMock()
+    proc.pid = 99999
+    proc.returncode = returncode
+    proc.communicate.return_value = (stdout, stderr)
+    return proc
+
+
 def _rpc_request(method: str, params: dict, req_id: int | None = None) -> dict:
     fid = req_id if req_id is not None else _next_id()
     frame = {"jsonrpc": "2.0", "id": fid, "method": method, "params": params}
@@ -118,13 +130,14 @@ def _tool_call(name: str, arguments: dict) -> tuple[int, dict]:
     _rpc_request("tools/call", {"name": name, "arguments": arguments}, req_id=fid)
     # Dispatch to actual server tool function
     fn = {
-        "list_case_images":         server_mod.list_case_images,
-        "list_available_plugins":   server_mod.list_available_plugins,
-        "launch_volatility_plugin": server_mod.launch_volatility_plugin,
-        "check_job_status":         server_mod.check_job_status,
-        "read_job_output_page":     server_mod.read_job_output_page,
-        "list_active_jobs":         server_mod.list_active_jobs,
-        "get_plugin_help":          server_mod.get_plugin_help,
+        "list_case_images":           server_mod.list_case_images,
+        "list_available_plugins":     server_mod.list_available_plugins,
+        "launch_volatility_plugin":   server_mod.launch_volatility_plugin,
+        "check_job_status":           server_mod.check_job_status,
+        "read_job_output_page":       server_mod.read_job_output_page,
+        "list_active_jobs":           server_mod.list_active_jobs,
+        "get_plugin_help":            server_mod.get_plugin_help,
+        "generate_incident_report":   server_mod.generate_incident_report,
     }[name]
     raw = fn(**arguments)
     # Wrap in MCP content envelope
@@ -269,13 +282,14 @@ def run_simulation() -> None:
     _rpc_request("tools/list", {}, req_id=tools_list_id)
     tools_payload = {
         "tools": [
-            {"name": "list_case_images",         "description": "Read-only case image registry"},
-            {"name": "list_available_plugins",   "description": "Plugin allow-list"},
-            {"name": "launch_volatility_plugin", "description": "Async plugin dispatch → job_id"},
-            {"name": "check_job_status",         "description": "Poll job status + output (capped at MAX_OUTPUT_LINES)"},
-            {"name": "read_job_output_page",     "description": "Page through full untruncated job output"},
-            {"name": "list_active_jobs",         "description": "Session job overview"},
-            {"name": "get_plugin_help",          "description": "Synchronous plugin --help"},
+            {"name": "list_case_images",          "description": "Read-only case image registry"},
+            {"name": "list_available_plugins",    "description": "Plugin allow-list"},
+            {"name": "launch_volatility_plugin",  "description": "Async plugin dispatch → job_id"},
+            {"name": "check_job_status",          "description": "Poll job status + output (capped at MAX_OUTPUT_LINES)"},
+            {"name": "read_job_output_page",      "description": "Page through full untruncated job output (disk-backed)"},
+            {"name": "list_active_jobs",          "description": "Session job overview"},
+            {"name": "get_plugin_help",           "description": "Synchronous plugin --help"},
+            {"name": "generate_incident_report",  "description": "Compile final report — BLOCKED until all truncated jobs are fully paged"},
         ]
     }
     _rpc_response(tools_list_id, tools_payload)
@@ -296,9 +310,9 @@ def run_simulation() -> None:
     # ── Phase 1: Broad process list ──────────────────────────────────────
     _banner("Phase 1 — Broad pslist (340 rows, malware at row 290)")
 
-    fake_pslist = MagicMock(stdout=_pslist_output(), stderr="", returncode=0)
+    fake_pslist = _fake_popen(_pslist_output())
 
-    with patch("server.mcp_vol_server.subprocess.run", return_value=fake_pslist), \
+    with patch("server.mcp_vol_server.subprocess.Popen", return_value=fake_pslist), \
          patch("server.mcp_vol_server.CASE_REGISTRY",
                {TARGET_IMAGE: Path("/cases/irc-beacon/win10-mem.raw")}):
         _, launch1 = _tool_call("launch_volatility_plugin", {
@@ -326,7 +340,19 @@ def run_simulation() -> None:
     if truncated:
         print(f"\n  {_c(YELLOW, '⚠ TRUNCATION DETECTED')} — output capped at {row_count} rows.")
         print(f"  {_c(YELLOW, '  240 rows dropped.')}  Malware at row 290 is NOT visible yet.")
-        print(f"  {_c(CYAN, '  Self-Correction: paging full pslist via read_job_output_page...')}")
+
+        # ── Phase 1a: Protocol gate test (must happen BEFORE paging) ────────
+        _banner("Phase 1a — Protocol Gate: generate_incident_report (expect BLOCKED)")
+
+        _, gate_result = _tool_call("generate_incident_report", {"image_slug": TARGET_IMAGE})
+        gate_status = gate_result.get("status", "")
+        if gate_status == "PROTOCOL_ERROR":
+            _log("gate result", _c(RED, "PROTOCOL_ERROR — report correctly BLOCKED"))
+            _log("gate message", gate_result.get("error", "")[:120])
+        else:
+            _log("gate result", _c(YELLOW, f"unexpected: {gate_status}"))
+
+        print(f"\n  {_c(CYAN, '  Self-Correction: paging full pslist via read_job_output_page...')}")
 
         _banner("Phase 1b — Self-Correction: Iterative Paging to Recover Truncated Rows")
 
@@ -371,11 +397,24 @@ def run_simulation() -> None:
         else:
             _log("paging complete", "no anomalies found in full process list")
 
+        # Verify disk output was created by the server (Task 1/3 compliance)
+        disk_path = Path(f"/tmp/sift_bridge_runtime/jobs/{job1}/raw_output.txt.gz")
+        if disk_path.exists():
+            size_kb = disk_path.stat().st_size / 1024
+            _log(
+                "disk verification",
+                _c(GREEN, f"raw_output.txt.gz exists — {size_kb:.1f} KB "
+                          f"(host RAM freed after write)"),
+            )
+            _log("disk path", str(disk_path))
+        else:
+            _log("disk verification", _c(YELLOW, f"file not found at {disk_path}"))
+
     # ── Phase 2: Cmdline on anomalous PID (targeted, no truncation) ──────
     _banner("Phase 2 — Targeted cmdline (PID 9321 — anomalous svchost)")
 
-    fake_cmdline = MagicMock(stdout=_cmdline_output(), stderr="", returncode=0)
-    with patch("server.mcp_vol_server.subprocess.run", return_value=fake_cmdline), \
+    fake_cmdline = _fake_popen(_cmdline_output())
+    with patch("server.mcp_vol_server.subprocess.Popen", return_value=fake_cmdline), \
          patch("server.mcp_vol_server.CASE_REGISTRY",
                {TARGET_IMAGE: Path("/cases/irc-beacon/win10-mem.raw")}):
         _, launch2 = _tool_call("launch_volatility_plugin", {
@@ -395,8 +434,8 @@ def run_simulation() -> None:
     # ── Phase 3: Malfind confirms code injection ─────────────────────────
     _banner("Phase 3 — malfind (PID 9321 — confirm process injection)")
 
-    fake_malfind = MagicMock(stdout=_malfind_output(), stderr="", returncode=0)
-    with patch("server.mcp_vol_server.subprocess.run", return_value=fake_malfind), \
+    fake_malfind = _fake_popen(_malfind_output())
+    with patch("server.mcp_vol_server.subprocess.Popen", return_value=fake_malfind), \
          patch("server.mcp_vol_server.CASE_REGISTRY",
                {TARGET_IMAGE: Path("/cases/irc-beacon/win10-mem.raw")}):
         _, launch3 = _tool_call("launch_volatility_plugin", {
@@ -416,8 +455,8 @@ def run_simulation() -> None:
     # ── Phase 4: Network scan — confirm C2 channel ───────────────────────
     _banner("Phase 4 — netscan (confirm active C2 connection)")
 
-    fake_netscan = MagicMock(stdout=_netscan_output(), stderr="", returncode=0)
-    with patch("server.mcp_vol_server.subprocess.run", return_value=fake_netscan), \
+    fake_netscan = _fake_popen(_netscan_output())
+    with patch("server.mcp_vol_server.subprocess.Popen", return_value=fake_netscan), \
          patch("server.mcp_vol_server.CASE_REGISTRY",
                {TARGET_IMAGE: Path("/cases/irc-beacon/win10-mem.raw")}):
         _, launch4 = _tool_call("launch_volatility_plugin", {
@@ -436,8 +475,8 @@ def run_simulation() -> None:
     # ── Phase 5: Persistence — registry Run key ───────────────────────────
     _banner("Phase 5 — registry_printkey (confirm persistence)")
 
-    fake_reg = MagicMock(stdout=_registry_output(), stderr="", returncode=0)
-    with patch("server.mcp_vol_server.subprocess.run", return_value=fake_reg), \
+    fake_reg = _fake_popen(_registry_output())
+    with patch("server.mcp_vol_server.subprocess.Popen", return_value=fake_reg), \
          patch("server.mcp_vol_server.CASE_REGISTRY",
                {TARGET_IMAGE: Path("/cases/irc-beacon/win10-mem.raw")}):
         _, launch5 = _tool_call("launch_volatility_plugin", {
@@ -454,12 +493,37 @@ def run_simulation() -> None:
         if line.strip():
             print(f"  {_c(RED, '  ►')} {line}")
 
-    # ── Phase 6: Timeout failure mode demonstration ───────────────────────
-    _banner("Phase 6 — Failure Mode: filescan TIMEOUT (simulated)")
+    # ── Phase 6: Incident report — gate now passes ───────────────────────
+    _banner("Phase 6 — generate_incident_report (expect REPORT_READY)")
+
+    _, report = _tool_call("generate_incident_report", {"image_slug": TARGET_IMAGE})
+    report_status = report.get("status", "")
+    if report_status == "REPORT_READY":
+        total = report.get("total_complete_jobs", 0)
+        _log("report result", _c(GREEN, f"REPORT_READY — {total} complete jobs compiled"))
+        for finding in report.get("findings", []):
+            explored = _c(GREEN, "✓") if finding["fully_explored"] else _c(RED, "✗")
+            _log(
+                "  finding",
+                f"{explored} plugin={finding['plugin_slug']:25s} "
+                f"rows={finding['row_count']}  truncated={finding['truncated']}",
+            )
+    elif report_status == "PROTOCOL_ERROR":
+        _log("report result", _c(RED, f"UNEXPECTED BLOCK: {report.get('error', '')}"))
+    else:
+        _log("report result", _c(YELLOW, f"status={report_status}"))
+
+    # ── Phase 7: Timeout failure mode — server stability under load ──────
+    _banner("Phase 7 — Failure Mode: filescan TIMEOUT (simulated)")
 
     import subprocess as sp
-    with patch("server.mcp_vol_server.subprocess.run",
-               side_effect=sp.TimeoutExpired(cmd=["vol"], timeout=180)), \
+    def _timeout_popen(*a, **kw):
+        proc = MagicMock()
+        proc.pid = 99999
+        proc.communicate.side_effect = [
+            sp.TimeoutExpired(cmd=["vol"], timeout=180), ("", "")]
+        return proc
+    with patch("server.mcp_vol_server.subprocess.Popen", side_effect=_timeout_popen), \
          patch("server.mcp_vol_server.CASE_REGISTRY",
                {TARGET_IMAGE: Path("/cases/irc-beacon/win10-mem.raw")}):
         _, launch6 = _tool_call("launch_volatility_plugin", {
@@ -474,9 +538,9 @@ def run_simulation() -> None:
     _log("filescan result", _c(RED, "status=timeout — server remains stable"))
     _log("agent guidance", p6.get("message", ""))
 
-    # Confirm server still healthy
+    # Confirm server still healthy after hard timeout
     _, health = _tool_call("list_active_jobs", {})
-    _log("health check", f"{_c(GREEN, 'server healthy')} — {health['count']} total jobs")
+    _log("health check", f"{_c(GREEN, 'server healthy')} — {health['count']} total jobs in registry")
 
     # ── Session summary ───────────────────────────────────────────────────
     _banner("Session Summary")

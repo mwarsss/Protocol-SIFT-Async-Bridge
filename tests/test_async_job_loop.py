@@ -61,12 +61,20 @@ def _reload_server():
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_fake_subprocess(stdout: str, returncode: int = 0, stderr: str = ""):
-    """Return a mock object mimicking subprocess.CompletedProcess."""
+def _make_fake_popen(stdout: str = "", returncode: int = 0, stderr: str = "",
+                     raise_timeout: bool = False):
+    """Return a mock Popen instance with communicate() pre-wired."""
+    import subprocess as _sp
     mock = MagicMock()
-    mock.stdout = stdout
-    mock.stderr = stderr
+    mock.pid = 99999
     mock.returncode = returncode
+    if raise_timeout:
+        mock.communicate.side_effect = [
+            _sp.TimeoutExpired(cmd=["vol"], timeout=10),
+            ("", ""),
+        ]
+    else:
+        mock.communicate.return_value = (stdout, stderr)
     return mock
 
 
@@ -194,9 +202,9 @@ class TestAsyncJobLoop:
         """Full round-trip: launch → PENDING → RUNNING → COMPLETE."""
         import server.mcp_vol_server as mod
 
-        fake_proc = _make_fake_subprocess(stdout=FAKE_PSLIST_OUTPUT, returncode=0)
+        fake_proc = _make_fake_popen(stdout=FAKE_PSLIST_OUTPUT, returncode=0)
 
-        with patch("server.mcp_vol_server.subprocess.run", return_value=fake_proc), \
+        with patch("server.mcp_vol_server.subprocess.Popen", return_value=fake_proc), \
              patch("server.mcp_vol_server.CASE_REGISTRY", {
                  "test-win10": Path("/tmp/fake_win10.raw")
              }):
@@ -228,12 +236,12 @@ class TestAsyncJobLoop:
         """Volatility returning non-zero should set status=failed."""
         import server.mcp_vol_server as mod
 
-        fake_proc = _make_fake_subprocess(
+        fake_proc = _make_fake_popen(
             stdout="",
             stderr="Error: unsupported profile",
             returncode=1,
         )
-        with patch("server.mcp_vol_server.subprocess.run", return_value=fake_proc), \
+        with patch("server.mcp_vol_server.subprocess.Popen", return_value=fake_proc), \
              patch("server.mcp_vol_server.CASE_REGISTRY", {
                  "test-win10": Path("/tmp/fake_win10.raw")
              }):
@@ -255,8 +263,8 @@ class TestAsyncJobLoop:
         import server.mcp_vol_server as mod
         import subprocess as sp
 
-        with patch("server.mcp_vol_server.subprocess.run",
-                   side_effect=sp.TimeoutExpired(cmd=["vol"], timeout=10)), \
+        with patch("server.mcp_vol_server.subprocess.Popen",
+                   return_value=_make_fake_popen(raise_timeout=True)), \
              patch("server.mcp_vol_server.CASE_REGISTRY", {
                  "test-win10": Path("/tmp/fake_win10.raw")
              }):
@@ -283,14 +291,17 @@ class TestAsyncJobLoop:
             with lock:
                 n = call_count["n"]
                 call_count["n"] += 1
-            # First call: simulate a slow plugin
+            proc = _make_fake_popen(returncode=0)
             if n == 0:
-                time.sleep(0.3)
-                return _make_fake_subprocess("PID\tImageFileName\n4\tSystem", returncode=0)
-            # Second call: fast
-            return _make_fake_subprocess("PID\tImageFileName\n88\tsmss.exe", returncode=0)
+                def slow_comm(**kw):
+                    time.sleep(0.3)
+                    return ("PID\tImageFileName\n4\tSystem", "")
+                proc.communicate.side_effect = slow_comm
+            else:
+                proc.communicate.return_value = ("PID\tImageFileName\n88\tsmss.exe", "")
+            return proc
 
-        with patch("server.mcp_vol_server.subprocess.run", side_effect=slow_then_fast), \
+        with patch("server.mcp_vol_server.subprocess.Popen", side_effect=slow_then_fast), \
              patch("server.mcp_vol_server.CASE_REGISTRY", {
                  "test-win10": Path("/tmp/fake_win10.raw")
              }):
@@ -320,8 +331,8 @@ class TestAsyncJobLoop:
     def test_list_active_jobs_reflects_launched_jobs(self):
         import server.mcp_vol_server as mod
 
-        fake_proc = _make_fake_subprocess("PID\t4\tSystem", returncode=0)
-        with patch("server.mcp_vol_server.subprocess.run", return_value=fake_proc), \
+        fake_proc = _make_fake_popen("PID\t4\tSystem", returncode=0)
+        with patch("server.mcp_vol_server.subprocess.Popen", return_value=fake_proc), \
              patch("server.mcp_vol_server.CASE_REGISTRY", {
                  "test-win10": Path("/tmp/fake_win10.raw")
              }):
@@ -353,8 +364,8 @@ class TestPagingTool:
         """Launch a job with n_rows of synthetic pslist and wait for completion."""
         from pathlib import Path
         large_output = TestPagingTool._build_large_pslist(n_rows)
-        fake = _make_fake_subprocess(stdout=large_output, returncode=0)
-        with patch("server.mcp_vol_server.subprocess.run", return_value=fake), \
+        fake = _make_fake_popen(stdout=large_output, returncode=0)
+        with patch("server.mcp_vol_server.subprocess.Popen", return_value=fake), \
              patch("server.mcp_vol_server.CASE_REGISTRY", {"test-win10": Path("/tmp/f.raw")}):
             r = mod.launch_volatility_plugin("test-win10", "pslist")
             job_id = r["job_id"]
@@ -427,11 +438,15 @@ class TestPagingTool:
         # Use a slow side-effect so the job stays in running state
         barrier = threading.Event()
 
-        def blocking_run(*args, **kwargs):
-            barrier.wait(timeout=3)
-            return _make_fake_subprocess("PID\t4\tSystem", returncode=0)
+        def blocking_popen(*args, **kwargs):
+            proc = _make_fake_popen(returncode=0)
+            def blocking_comm(**kw):
+                barrier.wait(timeout=3)
+                return ("PID\t4\tSystem", "")
+            proc.communicate.side_effect = blocking_comm
+            return proc
 
-        with patch("server.mcp_vol_server.subprocess.run", side_effect=blocking_run), \
+        with patch("server.mcp_vol_server.subprocess.Popen", side_effect=blocking_popen), \
              patch("server.mcp_vol_server.CASE_REGISTRY", {"test-win10": Path("/tmp/f.raw")}):
             r = mod.launch_volatility_plugin("test-win10", "pslist")
             job_id = r["job_id"]
