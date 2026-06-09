@@ -163,6 +163,9 @@ class JobRecord:
 
 
 _job_registry: dict[str, JobRecord] = {}
+# Full stripped lines per completed job — never returned via check_job_status
+# (that path is truncated); only accessible via read_job_output_page.
+_raw_output_registry: dict[str, list[str]] = {}
 _registry_lock = threading.Lock()
 _executor = ThreadPoolExecutor(max_workers=MAX_WORKERS, thread_name_prefix="vol-worker")
 
@@ -184,6 +187,21 @@ def _update_job(job_id: str, **kwargs: Any) -> None:
 # Output parser/truncator  (ARCH RULE 3 — CONTEXT SAFETY)
 # ---------------------------------------------------------------------------
 
+def _strip_vol_lines(raw: str) -> list[str]:
+    """
+    Strip blank lines and Volatility progress spinners from raw output.
+    Used by both _parse_vol_output (for the truncated summary) and
+    _run_volatility (to store full lines for paging).
+    """
+    return [
+        ln.rstrip() for ln in raw.splitlines()
+        if ln.strip()
+        and not ln.rstrip().startswith("Volatility 3")
+        and not ln.rstrip().startswith("Progress")
+        and "100%|" not in ln
+    ]
+
+
 def _parse_vol_output(raw: str) -> tuple[str, int, bool]:
     """
     Parse raw Volatility text output into a compact, LLM-safe summary.
@@ -199,15 +217,7 @@ def _parse_vol_output(raw: str) -> tuple[str, int, bool]:
         MAX_OUTPUT_LINES non-empty lines.
       - Append a truncation notice when rows were dropped.
     """
-    lines = [ln.rstrip() for ln in raw.splitlines()]
-    # Strip Volatility progress noise
-    lines = [
-        ln for ln in lines
-        if ln
-        and not ln.startswith("Volatility 3")
-        and not ln.startswith("Progress")
-        and "100%|" not in ln
-    ]
+    lines = _strip_vol_lines(raw)
 
     if not lines:
         return "(no output)", 0, False
@@ -320,6 +330,10 @@ def _run_volatility(job_id: str) -> None:
 
     # Parse and truncate  (ARCH RULE 3)
     raw_output = result.stdout + (f"\n[STDERR]\n{result.stderr}" if result.stderr.strip() else "")
+    # Store the full cleaned line list for paging BEFORE truncation is applied
+    full_lines = _strip_vol_lines(raw_output)
+    with _registry_lock:
+        _raw_output_registry[job_id] = full_lines
     summary, row_count, truncated = _parse_vol_output(raw_output)
 
     _update_job(
@@ -522,6 +536,123 @@ def check_job_status(job_id: str) -> dict[str, Any]:
         )
 
     return result
+
+
+@mcp.tool()
+def read_job_output_page(job_id: str, page_number: int = 1) -> dict[str, Any]:
+    """
+    Page through the full (untruncated) output of a completed job.
+
+    check_job_status() returns only the first MAX_OUTPUT_LINES rows to
+    protect the context window.  When truncated=True, use this tool to
+    retrieve subsequent pages without rerunning the plugin.  The column
+    header is repeated at the top of every page for analyst readability.
+
+    Inspired by Valhuntir's Iterative Context Feed pattern — the agent
+    maintains sequential state and scrolls through large process lists
+    exactly as a senior analyst would.
+
+    Args:
+        job_id:      UUID returned by launch_volatility_plugin.
+        page_number: 1-based page index (default: 1).
+
+    Returns:
+        page_content, page_number, total_pages, total_rows, has_more,
+        row_range — all fields needed to construct the next poll call.
+    """
+    record = _get_job(job_id)
+    if record is None:
+        return {"error": f"Job '{job_id}' not found. Verify the job_id."}
+
+    if record.status not in (JobStatus.COMPLETE, JobStatus.FAILED):
+        return {
+            "error": (
+                f"Job is not yet in a terminal state (status={record.status.value}). "
+                f"Wait until check_job_status returns 'complete' or 'failed' "
+                f"before paging output."
+            )
+        }
+
+    with _registry_lock:
+        all_lines = _raw_output_registry.get(job_id, [])
+
+    if not all_lines:
+        return {
+            "job_id": job_id,
+            "page_number": 1,
+            "total_pages": 1,
+            "total_rows": 0,
+            "has_more": False,
+            "page_content": "(no output available for this job)",
+        }
+
+    page_size = MAX_OUTPUT_LINES
+
+    # Detect tabular header: repeat it on every page so each page is
+    # self-describing without forcing the agent to remember page 1.
+    header_line = ""
+    data_start = 0
+    for i, ln in enumerate(all_lines[:5]):
+        if "\t" in ln or "  " in ln:
+            header_line = ln
+            data_start = i + 1
+            break
+
+    data_lines = all_lines[data_start:]
+    total_data_rows = len(data_lines)
+    total_pages = max(1, (total_data_rows + page_size - 1) // page_size)
+
+    if page_number < 1 or page_number > total_pages:
+        return {
+            "error": (
+                f"Page {page_number} is out of range. "
+                f"Valid pages: 1–{total_pages} ({total_data_rows} total rows)."
+            ),
+            "total_pages": total_pages,
+            "total_rows": total_data_rows,
+        }
+
+    start_idx = (page_number - 1) * page_size
+    end_idx = min(start_idx + page_size, total_data_rows)
+    page_lines = data_lines[start_idx:end_idx]
+    has_more = end_idx < total_data_rows
+
+    content_parts = ([header_line] if header_line else []) + page_lines
+    page_content = "\n".join(content_parts)
+
+    if has_more:
+        page_content += (
+            f"\n\n[PAGE {page_number}/{total_pages} — "
+            f"rows {start_idx + 1}–{end_idx} of {total_data_rows}. "
+            f"Call read_job_output_page('{job_id}', {page_number + 1}) for next page.]"
+        )
+    else:
+        page_content += (
+            f"\n\n[PAGE {page_number}/{total_pages} — "
+            f"rows {start_idx + 1}–{end_idx} of {total_data_rows}. "
+            f"END OF FORENSIC OUTPUT.]"
+        )
+
+    _write_trace({
+        "event": "tool_call",
+        "tool": "read_job_output_page",
+        "job_id": job_id,
+        "page_number": page_number,
+        "total_pages": total_pages,
+        "has_more": has_more,
+    })
+
+    return {
+        "job_id": job_id,
+        "plugin_slug": record.plugin_slug,
+        "image_slug": record.image_slug,
+        "page_number": page_number,
+        "total_pages": total_pages,
+        "row_range": f"{start_idx + 1}–{end_idx}",
+        "total_rows": total_data_rows,
+        "has_more": has_more,
+        "page_content": page_content,
+    }
 
 
 @mcp.tool()

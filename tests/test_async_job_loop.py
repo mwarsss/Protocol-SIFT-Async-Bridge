@@ -332,6 +332,126 @@ class TestAsyncJobLoop:
             assert job_id in ids
 
 
+class TestPagingTool:
+    """
+    Validates read_job_output_page — the iterative context feed that lets
+    the agent page past the MAX_OUTPUT_LINES truncation ceiling without
+    rerunning the plugin or flooding the context window.
+    """
+
+    @staticmethod
+    def _build_large_pslist(n_rows: int) -> str:
+        header = "PID\tPPID\tImageFileName\tOffset(V)\tThreads\tHandles"
+        rows = "\n".join(
+            f"{1000 + i}\t4\tproc{i}.exe\t0x{i:08x}\t2\t10"
+            for i in range(n_rows)
+        )
+        return f"{header}\n{rows}"
+
+    @staticmethod
+    def _complete_job(mod, n_rows: int = 50):
+        """Launch a job with n_rows of synthetic pslist and wait for completion."""
+        from pathlib import Path
+        large_output = TestPagingTool._build_large_pslist(n_rows)
+        fake = _make_fake_subprocess(stdout=large_output, returncode=0)
+        with patch("server.mcp_vol_server.subprocess.run", return_value=fake), \
+             patch("server.mcp_vol_server.CASE_REGISTRY", {"test-win10": Path("/tmp/f.raw")}):
+            r = mod.launch_volatility_plugin("test-win10", "pslist")
+            job_id = r["job_id"]
+            deadline = time.time() + 5
+            while time.time() < deadline:
+                poll = mod.check_job_status(job_id)
+                if poll["status"] in ("complete", "failed", "timeout"):
+                    break
+                time.sleep(0.05)
+            return job_id, poll
+
+    def test_page1_contains_first_rows(self):
+        """Page 1 must include rows from the start of the data (proc0, proc1...)."""
+        import server.mcp_vol_server as mod
+        job_id, poll = self._complete_job(mod, n_rows=50)
+        assert poll["status"] == "complete"
+        assert poll["truncated"] is True  # 50 rows > MAX_OUTPUT_LINES=20
+
+        page1 = mod.read_job_output_page(job_id, page_number=1)
+        assert "error" not in page1
+        assert "proc0.exe" in page1["page_content"]
+        assert page1["page_number"] == 1
+        assert page1["has_more"] is True
+
+    def test_page2_contains_rows_past_truncation_boundary(self):
+        """Page 2 must contain rows that were dropped by check_job_status."""
+        import server.mcp_vol_server as mod
+        job_id, _ = self._complete_job(mod, n_rows=50)
+
+        page1 = mod.read_job_output_page(job_id, page_number=1)
+        # Row 20 (proc20) is beyond MAX_OUTPUT_LINES=20, so absent from page 1
+        assert "proc20.exe" not in page1["page_content"]
+
+        page2 = mod.read_job_output_page(job_id, page_number=2)
+        assert "proc20.exe" in page2["page_content"]
+        assert page2["page_number"] == 2
+
+    def test_last_page_has_more_false_and_end_marker(self):
+        """Final page must have has_more=False and the END OF FORENSIC OUTPUT marker."""
+        import server.mcp_vol_server as mod
+        # 50 rows, page_size=20 → total_pages=3
+        job_id, _ = self._complete_job(mod, n_rows=50)
+
+        page3 = mod.read_job_output_page(job_id, page_number=3)
+        assert page3["has_more"] is False
+        assert "END OF FORENSIC OUTPUT" in page3["page_content"]
+        assert page3["total_pages"] == 3
+
+    def test_out_of_range_page_returns_error(self):
+        """Requesting page beyond total_pages must return an error dict, not crash."""
+        import server.mcp_vol_server as mod
+        job_id, _ = self._complete_job(mod, n_rows=50)
+
+        result = mod.read_job_output_page(job_id, page_number=99)
+        assert "error" in result
+        assert "total_pages" in result
+
+    def test_paging_nonexistent_job_returns_error(self):
+        """Non-existent job_id must return an error, not a KeyError."""
+        import server.mcp_vol_server as mod
+        result = mod.read_job_output_page("00000000-0000-0000-0000-000000000000")
+        assert "error" in result
+
+    def test_paging_incomplete_job_blocked(self):
+        """Paging must be rejected while the job is still pending/running."""
+        import server.mcp_vol_server as mod
+        from pathlib import Path
+        import subprocess as sp
+
+        # Use a slow side-effect so the job stays in running state
+        barrier = threading.Event()
+
+        def blocking_run(*args, **kwargs):
+            barrier.wait(timeout=3)
+            return _make_fake_subprocess("PID\t4\tSystem", returncode=0)
+
+        with patch("server.mcp_vol_server.subprocess.run", side_effect=blocking_run), \
+             patch("server.mcp_vol_server.CASE_REGISTRY", {"test-win10": Path("/tmp/f.raw")}):
+            r = mod.launch_volatility_plugin("test-win10", "pslist")
+            job_id = r["job_id"]
+            # Give the thread a moment to transition to running
+            time.sleep(0.05)
+            result = mod.read_job_output_page(job_id)
+            assert "error" in result
+            assert "terminal" in result["error"].lower() or "complete" in result["error"].lower()
+            barrier.set()  # unblock the worker thread
+
+    def test_header_repeated_on_page2(self):
+        """Column header must appear on page 2 for self-describing output."""
+        import server.mcp_vol_server as mod
+        job_id, _ = self._complete_job(mod, n_rows=50)
+
+        page2 = mod.read_job_output_page(job_id, page_number=2)
+        assert "PID" in page2["page_content"]
+        assert "ImageFileName" in page2["page_content"]
+
+
 class TestTraceLogging:
     """Validate JSON-RPC traces are written to the logs/ directory."""
 
