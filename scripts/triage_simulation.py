@@ -3,7 +3,7 @@ Triage Simulation — Protocol-SIFT-Async-Bridge
 ===============================================
 
 Simulates a complete LLM-driven incident response session against the
-MCP server.  subprocess.run is patched with realistic Volatility output
+MCP server.  subprocess.Popen is patched with realistic Volatility output
 so the full async pipeline runs without a live memory image.
 
 Captures every JSON-RPC frame (initialize, tools/list, tools/call request
@@ -97,6 +97,15 @@ def _emit_frame(frame: dict[str, Any]) -> None:
     frame["_sim_ts"] = datetime.now(timezone.utc).isoformat()
     with _SIM_LOG.open("a") as fh:
         fh.write(json.dumps(frame) + "\n")
+
+
+def _fake_popen(stdout: str, returncode: int = 0, stderr: str = "") -> MagicMock:
+    """Build a Popen mock whose communicate() returns the given outputs."""
+    proc = MagicMock()
+    proc.pid = 99999
+    proc.returncode = returncode
+    proc.communicate.return_value = (stdout, stderr)
+    return proc
 
 
 def _rpc_request(method: str, params: dict, req_id: int | None = None) -> dict:
@@ -301,9 +310,9 @@ def run_simulation() -> None:
     # ── Phase 1: Broad process list ──────────────────────────────────────
     _banner("Phase 1 — Broad pslist (340 rows, malware at row 290)")
 
-    fake_pslist = MagicMock(stdout=_pslist_output(), stderr="", returncode=0)
+    fake_pslist = _fake_popen(_pslist_output())
 
-    with patch("server.mcp_vol_server.subprocess.run", return_value=fake_pslist), \
+    with patch("server.mcp_vol_server.subprocess.Popen", return_value=fake_pslist), \
          patch("server.mcp_vol_server.CASE_REGISTRY",
                {TARGET_IMAGE: Path("/cases/irc-beacon/win10-mem.raw")}):
         _, launch1 = _tool_call("launch_volatility_plugin", {
@@ -404,8 +413,8 @@ def run_simulation() -> None:
     # ── Phase 2: Cmdline on anomalous PID (targeted, no truncation) ──────
     _banner("Phase 2 — Targeted cmdline (PID 9321 — anomalous svchost)")
 
-    fake_cmdline = MagicMock(stdout=_cmdline_output(), stderr="", returncode=0)
-    with patch("server.mcp_vol_server.subprocess.run", return_value=fake_cmdline), \
+    fake_cmdline = _fake_popen(_cmdline_output())
+    with patch("server.mcp_vol_server.subprocess.Popen", return_value=fake_cmdline), \
          patch("server.mcp_vol_server.CASE_REGISTRY",
                {TARGET_IMAGE: Path("/cases/irc-beacon/win10-mem.raw")}):
         _, launch2 = _tool_call("launch_volatility_plugin", {
@@ -425,8 +434,8 @@ def run_simulation() -> None:
     # ── Phase 3: Malfind confirms code injection ─────────────────────────
     _banner("Phase 3 — malfind (PID 9321 — confirm process injection)")
 
-    fake_malfind = MagicMock(stdout=_malfind_output(), stderr="", returncode=0)
-    with patch("server.mcp_vol_server.subprocess.run", return_value=fake_malfind), \
+    fake_malfind = _fake_popen(_malfind_output())
+    with patch("server.mcp_vol_server.subprocess.Popen", return_value=fake_malfind), \
          patch("server.mcp_vol_server.CASE_REGISTRY",
                {TARGET_IMAGE: Path("/cases/irc-beacon/win10-mem.raw")}):
         _, launch3 = _tool_call("launch_volatility_plugin", {
@@ -446,8 +455,8 @@ def run_simulation() -> None:
     # ── Phase 4: Network scan — confirm C2 channel ───────────────────────
     _banner("Phase 4 — netscan (confirm active C2 connection)")
 
-    fake_netscan = MagicMock(stdout=_netscan_output(), stderr="", returncode=0)
-    with patch("server.mcp_vol_server.subprocess.run", return_value=fake_netscan), \
+    fake_netscan = _fake_popen(_netscan_output())
+    with patch("server.mcp_vol_server.subprocess.Popen", return_value=fake_netscan), \
          patch("server.mcp_vol_server.CASE_REGISTRY",
                {TARGET_IMAGE: Path("/cases/irc-beacon/win10-mem.raw")}):
         _, launch4 = _tool_call("launch_volatility_plugin", {
@@ -466,8 +475,8 @@ def run_simulation() -> None:
     # ── Phase 5: Persistence — registry Run key ───────────────────────────
     _banner("Phase 5 — registry_printkey (confirm persistence)")
 
-    fake_reg = MagicMock(stdout=_registry_output(), stderr="", returncode=0)
-    with patch("server.mcp_vol_server.subprocess.run", return_value=fake_reg), \
+    fake_reg = _fake_popen(_registry_output())
+    with patch("server.mcp_vol_server.subprocess.Popen", return_value=fake_reg), \
          patch("server.mcp_vol_server.CASE_REGISTRY",
                {TARGET_IMAGE: Path("/cases/irc-beacon/win10-mem.raw")}):
         _, launch5 = _tool_call("launch_volatility_plugin", {
@@ -508,8 +517,13 @@ def run_simulation() -> None:
     _banner("Phase 7 — Failure Mode: filescan TIMEOUT (simulated)")
 
     import subprocess as sp
-    with patch("server.mcp_vol_server.subprocess.run",
-               side_effect=sp.TimeoutExpired(cmd=["vol"], timeout=180)), \
+    def _timeout_popen(*a, **kw):
+        proc = MagicMock()
+        proc.pid = 99999
+        proc.communicate.side_effect = [
+            sp.TimeoutExpired(cmd=["vol"], timeout=180), ("", "")]
+        return proc
+    with patch("server.mcp_vol_server.subprocess.Popen", side_effect=_timeout_popen), \
          patch("server.mcp_vol_server.CASE_REGISTRY",
                {TARGET_IMAGE: Path("/cases/irc-beacon/win10-mem.raw")}):
         _, launch6 = _tool_call("launch_volatility_plugin", {

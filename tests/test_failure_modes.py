@@ -141,9 +141,12 @@ class TestTruncationHighSignal:
         """
         import server.mcp_vol_server as mod
         fake_output = _build_pslist(800, malware_row=450, malware_pid=9999)
-        fake_proc = MagicMock(stdout=fake_output, stderr="", returncode=0)
+        fake_proc = MagicMock()
+        fake_proc.pid = 99999
+        fake_proc.returncode = 0
+        fake_proc.communicate.return_value = (fake_output, "")
 
-        with patch("server.mcp_vol_server.subprocess.run", return_value=fake_proc), \
+        with patch("server.mcp_vol_server.subprocess.Popen", return_value=fake_proc), \
              patch("server.mcp_vol_server.CASE_REGISTRY",
                    {"test-win10": Path("/tmp/fake.raw")}):
             r = mod.launch_volatility_plugin("test-win10", "pslist")
@@ -199,11 +202,15 @@ class TestTruncationHighSignal:
         def side_effect(cmd, **kwargs):
             n = call_count["n"]
             call_count["n"] += 1
-            if n == 0:
-                return MagicMock(stdout=pslist_out, stderr="", returncode=0)
-            return MagicMock(stdout=netscan_filtered, stderr="", returncode=0)
+            proc = MagicMock()
+            proc.pid = 99999
+            proc.returncode = 0
+            proc.communicate.return_value = (
+                pslist_out if n == 0 else netscan_filtered, ""
+            )
+            return proc
 
-        with patch("server.mcp_vol_server.subprocess.run", side_effect=side_effect), \
+        with patch("server.mcp_vol_server.subprocess.Popen", side_effect=side_effect), \
              patch("server.mcp_vol_server.CASE_REGISTRY",
                    {"test-win10": Path("/tmp/fake.raw")}):
             # Run 1: broad pslist
@@ -234,8 +241,14 @@ class TestTimeoutHandling:
         import server.mcp_vol_server as mod
         import subprocess as sp
 
-        with patch("server.mcp_vol_server.subprocess.run",
-                   side_effect=sp.TimeoutExpired(cmd=["vol"], timeout=10)), \
+        def _timeout_popen(*a, **kw):
+            proc = MagicMock()
+            proc.pid = 99999
+            proc.communicate.side_effect = [
+                sp.TimeoutExpired(cmd=["vol"], timeout=10), ("", "")]
+            return proc
+
+        with patch("server.mcp_vol_server.subprocess.Popen", side_effect=_timeout_popen), \
              patch("server.mcp_vol_server.CASE_REGISTRY",
                    {"test-win10": Path("/tmp/fake.raw")}):
             r = mod.launch_volatility_plugin("test-win10", "filescan")
@@ -249,8 +262,14 @@ class TestTimeoutHandling:
         import server.mcp_vol_server as mod
         import subprocess as sp
 
-        with patch("server.mcp_vol_server.subprocess.run",
-                   side_effect=sp.TimeoutExpired(cmd=["vol"], timeout=10)), \
+        def _timeout_popen(*a, **kw):
+            proc = MagicMock()
+            proc.pid = 99999
+            proc.communicate.side_effect = [
+                sp.TimeoutExpired(cmd=["vol"], timeout=10), ("", "")]
+            return proc
+
+        with patch("server.mcp_vol_server.subprocess.Popen", side_effect=_timeout_popen), \
              patch("server.mcp_vol_server.CASE_REGISTRY",
                    {"test-win10": Path("/tmp/fake.raw")}):
             r = mod.launch_volatility_plugin("test-win10", "filescan")
@@ -271,11 +290,17 @@ class TestTimeoutHandling:
         def side_effect(cmd, **kwargs):
             n = call_n["n"]
             call_n["n"] += 1
+            proc = MagicMock()
+            proc.pid = 99999
+            proc.returncode = 0
             if n == 0:
-                raise sp.TimeoutExpired(cmd=cmd, timeout=10)
-            return MagicMock(stdout="PID\t4\tSystem", stderr="", returncode=0)
+                proc.communicate.side_effect = [
+                    sp.TimeoutExpired(cmd=cmd, timeout=10), ("", "")]
+            else:
+                proc.communicate.return_value = ("PID\t4\tSystem", "")
+            return proc
 
-        with patch("server.mcp_vol_server.subprocess.run", side_effect=side_effect), \
+        with patch("server.mcp_vol_server.subprocess.Popen", side_effect=side_effect), \
              patch("server.mcp_vol_server.CASE_REGISTRY",
                    {"test-win10": Path("/tmp/fake.raw")}):
             r1 = mod.launch_volatility_plugin("test-win10", "filescan")
@@ -292,8 +317,14 @@ class TestTimeoutHandling:
         import server.mcp_vol_server as mod
         import subprocess as sp
 
-        with patch("server.mcp_vol_server.subprocess.run",
-                   side_effect=sp.TimeoutExpired(cmd=["vol"], timeout=10)), \
+        def _timeout_popen(*a, **kw):
+            proc = MagicMock()
+            proc.pid = 99999
+            proc.communicate.side_effect = [
+                sp.TimeoutExpired(cmd=["vol"], timeout=10), ("", "")]
+            return proc
+
+        with patch("server.mcp_vol_server.subprocess.Popen", side_effect=_timeout_popen), \
              patch("server.mcp_vol_server.CASE_REGISTRY",
                    {"test-win10": Path("/tmp/fake.raw")}):
             jobs = [mod.launch_volatility_plugin("test-win10", "pslist") for _ in range(4)]
@@ -312,12 +343,12 @@ class TestFailedJobHandling:
     def test_failed_job_captures_stderr(self):
         import server.mcp_vol_server as mod
 
-        fake = MagicMock(
-            stdout="",
-            stderr="ERROR: Unable to load windows.pslist.PsList module",
-            returncode=1,
-        )
-        with patch("server.mcp_vol_server.subprocess.run", return_value=fake), \
+        fake = MagicMock()
+        fake.pid = 99999
+        fake.returncode = 1
+        fake.communicate.return_value = (
+            "", "ERROR: Unable to load windows.pslist.PsList module")
+        with patch("server.mcp_vol_server.subprocess.Popen", return_value=fake), \
              patch("server.mcp_vol_server.CASE_REGISTRY",
                    {"test-win10": Path("/tmp/fake.raw")}):
             r = mod.launch_volatility_plugin("test-win10", "pslist")
@@ -330,12 +361,12 @@ class TestFailedJobHandling:
         """If returncode != 0, status must be 'failed' even with some stdout."""
         import server.mcp_vol_server as mod
 
-        fake = MagicMock(
-            stdout="PID\t4\tSystem\n88\tsmss.exe\n",
-            stderr="Warning: symbol lookup failed",
-            returncode=2,
-        )
-        with patch("server.mcp_vol_server.subprocess.run", return_value=fake), \
+        fake = MagicMock()
+        fake.pid = 99999
+        fake.returncode = 2
+        fake.communicate.return_value = (
+            "PID\t4\tSystem\n88\tsmss.exe\n", "Warning: symbol lookup failed")
+        with patch("server.mcp_vol_server.subprocess.Popen", return_value=fake), \
              patch("server.mcp_vol_server.CASE_REGISTRY",
                    {"test-win10": Path("/tmp/fake.raw")}):
             r = mod.launch_volatility_plugin("test-win10", "pslist")
@@ -355,7 +386,7 @@ class TestMissingBinary:
     def test_missing_binary_error_message_actionable(self):
         import server.mcp_vol_server as mod
 
-        with patch("server.mcp_vol_server.subprocess.run",
+        with patch("server.mcp_vol_server.subprocess.Popen",
                    side_effect=FileNotFoundError("vol: No such file or directory")), \
              patch("server.mcp_vol_server.CASE_REGISTRY",
                    {"test-win10": Path("/tmp/fake.raw")}):
@@ -383,14 +414,20 @@ class TestPoolPressure:
         lock = threading.Lock()
 
         def ordered_side_effect(cmd, **kwargs):
-            time.sleep(0.05)  # simulate real work
-            pid_line = f"PID\t{id(threading.current_thread()) % 9000 + 1000}\tprocess"
-            with lock:
-                results_order.append(pid_line)
-            return MagicMock(stdout=pid_line, stderr="", returncode=0)
+            proc = MagicMock()
+            proc.pid = 99999
+            proc.returncode = 0
+            def do_work(**kw):
+                time.sleep(0.05)
+                pid_line = f"PID\t{id(threading.current_thread()) % 9000 + 1000}\tprocess"
+                with lock:
+                    results_order.append(pid_line)
+                return (pid_line, "")
+            proc.communicate.side_effect = do_work
+            return proc
 
         n_jobs = 6  # > MAX_WORKERS (2 in test env)
-        with patch("server.mcp_vol_server.subprocess.run",
+        with patch("server.mcp_vol_server.subprocess.Popen",
                    side_effect=ordered_side_effect), \
              patch("server.mcp_vol_server.CASE_REGISTRY",
                    {"test-win10": Path("/tmp/fake.raw")}):
@@ -430,8 +467,11 @@ class TestExtraArgInjection:
         """--pid 1234 is a legitimate filter and must NOT be rejected."""
         import server.mcp_vol_server as mod
 
-        fake = MagicMock(stdout="PID\t1234\tsvchost.exe", stderr="", returncode=0)
-        with patch("server.mcp_vol_server.subprocess.run", return_value=fake), \
+        fake = MagicMock()
+        fake.pid = 99999
+        fake.returncode = 0
+        fake.communicate.return_value = ("PID\t1234\tsvchost.exe", "")
+        with patch("server.mcp_vol_server.subprocess.Popen", return_value=fake), \
              patch("server.mcp_vol_server.CASE_REGISTRY",
                    {"test-win10": Path("/tmp/fake.raw")}):
             r = mod.launch_volatility_plugin(
@@ -458,11 +498,17 @@ class TestJobRegistryIsolation:
             with lock:
                 n = call_n["n"]
                 call_n["n"] += 1
-            time.sleep(0.05)
+            proc = MagicMock()
+            proc.pid = 99999
+            proc.returncode = 0
             output = f"PID\tJOB_MARKER_{n}\n1000\tsvchost.exe"
-            return MagicMock(stdout=output, stderr="", returncode=0)
+            def do_work(**kw):
+                time.sleep(0.05)
+                return (output, "")
+            proc.communicate.side_effect = do_work
+            return proc
 
-        with patch("server.mcp_vol_server.subprocess.run",
+        with patch("server.mcp_vol_server.subprocess.Popen",
                    side_effect=distinct_output), \
              patch("server.mcp_vol_server.CASE_REGISTRY",
                    {"test-win10": Path("/tmp/fake.raw")}):
