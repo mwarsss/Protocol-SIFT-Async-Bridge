@@ -1,6 +1,6 @@
 # Protocol-SIFT-Async-Bridge
 
-> **A production-grade, type-safe Custom MCP Server for memory forensics via Volatility 3 — purpose-built to close the 60-second attacker breakout window without triggering LLM timeouts or causing evidence spoliation.**
+> **A production-grade, type-safe Custom MCP Server for memory forensics via Volatility 3  purpose-built to close the 60-second attacker breakout window without triggering LLM timeouts or causing evidence spoliation.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-green.svg)](https://www.python.org/)
@@ -32,9 +32,9 @@ When a threat actor gains initial access, **the average breakout time to lateral
                      │  JSON-RPC over stdio (MCP protocol)
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              Protocol-SIFT-Async-Bridge                      │
-│              server/mcp_vol_server.py                        │
-│                                                              │
+│              Protocol-SIFT-Async-Bridge                     │
+│              server/mcp_vol_server.py                       │
+│                                                             │
 │  ┌──────────────────┐    ┌──────────────────────────────┐   │
 │  │   Tool Layer     │    │   Async Execution Engine     │   │
 │  │                  │    │                              │   │
@@ -47,8 +47,8 @@ When a threat actor gains initial access, **the average breakout time to lateral
 │  └──────────────────┘                   │                   │
 │                                         ▼                   │
 │  ┌──────────────────────────────────────────────────────┐   │
-│  │          Security Boundary Layer                      │   │
-│  │                                                       │   │
+│  │          Security Boundary Layer                     │   │
+│  │                                                      │   │
 │  │  CASE_REGISTRY: slug → Path (read-only, at startup)  │   │
 │  │  ALLOWED_PLUGINS: slug → FQN allow-list              │   │
 │  │  _parse_vol_output(): hard cap at MAX_OUTPUT_LINES   │   │
