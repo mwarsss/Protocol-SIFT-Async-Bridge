@@ -21,6 +21,8 @@ What is checked:
     6.  VOL3_BIN env var  — warn if unset (falls back to 'vol')
     7.  Logging directory  — write-access verified
     8.  Server entrypoint  — server/mcp_vol_server.py present
+    9.  SIFT_BRIDGE_STORAGE — disk output root write-access
+    10. Resource governance parameters (MAX_CONCURRENT_FORENSIC_JOBS, PROCESS_MEM_LIMIT_MB)
 """
 
 from __future__ import annotations
@@ -82,7 +84,7 @@ def _parse_version(ver_str: str) -> tuple[int, ...]:
 # ── check functions ──────────────────────────────────────────────────────────
 
 def check_python_version() -> None:
-    print(f"\n{_BOLD}[1/8] Python Version{_RESET}")
+    print(f"\n{_BOLD}[1/10] Python Version{_RESET}")
     major, minor = sys.version_info[:2]
     ver_str = f"{major}.{minor}.{sys.version_info.micro}"
     if (major, minor) >= (3, 11):
@@ -95,7 +97,7 @@ def check_python_version() -> None:
 
 
 def check_packages() -> None:
-    print(f"\n{_BOLD}[2/8] Python Package Dependencies{_RESET}")
+    print(f"\n{_BOLD}[2/10] Python Package Dependencies{_RESET}")
     req_file = _project_root() / "requirements.txt"
     if not req_file.exists():
         _fail(f"requirements.txt not found at {req_file}")
@@ -160,7 +162,7 @@ def check_packages() -> None:
 
 
 def check_volatility() -> None:
-    print(f"\n{_BOLD}[3/8] Volatility 3 Binary{_RESET}")
+    print(f"\n{_BOLD}[3/10] Volatility 3 Binary{_RESET}")
 
     # Resolve binary: check VOL3_BIN env var first, then PATH, then common paths
     vol3_bin = os.environ.get("VOL3_BIN", "").strip()
@@ -208,7 +210,7 @@ def check_case_images() -> None:
     fail json.loads() at startup.  This check is rewritten to match server
     behaviour.
     """
-    print(f"\n{_BOLD}[4/8] VOL_CASE_IMAGES — Case Image Registry{_RESET}")
+    print(f"\n{_BOLD}[4/10] VOL_CASE_IMAGES — Case Image Registry{_RESET}")
 
     raw = os.environ.get("VOL_CASE_IMAGES", "").strip()
     if not raw:
@@ -252,7 +254,7 @@ check_case_images._registry: dict = {}  # type: ignore[attr-defined]
 
 
 def check_image_paths() -> None:
-    print(f"\n{_BOLD}[5/8] Registered Image Path Accessibility{_RESET}")
+    print(f"\n{_BOLD}[5/10] Registered Image Path Accessibility{_RESET}")
 
     registry: dict = getattr(check_case_images, "_registry", {})
     if not registry:
@@ -285,7 +287,7 @@ def check_image_paths() -> None:
 
 
 def check_vol3_bin_env() -> None:
-    print(f"\n{_BOLD}[6/8] VOL3_BIN Environment Variable{_RESET}")
+    print(f"\n{_BOLD}[6/10] VOL3_BIN Environment Variable{_RESET}")
 
     vol3_bin = os.environ.get("VOL3_BIN", "").strip()
     if vol3_bin:
@@ -305,7 +307,7 @@ def check_vol3_bin_env() -> None:
 
 
 def check_log_directory() -> None:
-    print(f"\n{_BOLD}[7/8] Log Directory Write Access{_RESET}")
+    print(f"\n{_BOLD}[7/10] Log Directory Write Access{_RESET}")
 
     log_dir = _project_root() / "logs"
     try:
@@ -323,8 +325,73 @@ def check_log_directory() -> None:
         _fail(f"logs/ exists but is not writable: {exc}")
 
 
+def check_sift_storage() -> None:
+    print(f"\n{_BOLD}[9/10] SIFT_BRIDGE_STORAGE — Disk Output Root{_RESET}")
+
+    raw = os.environ.get("SIFT_BRIDGE_STORAGE", "").strip()
+    storage_path = Path(raw) if raw else Path("/tmp/sift_bridge_runtime")
+
+    if not raw:
+        _warn(
+            f"SIFT_BRIDGE_STORAGE is not set. Defaulting to {storage_path}. "
+            f"Set the variable to pin the storage root explicitly."
+        )
+    else:
+        _ok(f"SIFT_BRIDGE_STORAGE={raw!r}")
+
+    try:
+        storage_path.mkdir(parents=True, exist_ok=True)
+    except PermissionError as exc:
+        _fail(f"Cannot create storage root {storage_path}: {exc}")
+        return
+
+    probe = storage_path / ".write_probe"
+    try:
+        probe.write_text("preflight-verification")
+        probe.unlink()
+        _ok(f"Storage root writable: {storage_path.resolve()}")
+    except OSError as exc:
+        _fail(f"Storage root exists but is not writable: {exc}")
+
+
+def check_resource_governance() -> None:
+    print(f"\n{_BOLD}[10/10] Resource Governance Parameters{_RESET}")
+
+    max_jobs_raw = os.environ.get("MAX_CONCURRENT_FORENSIC_JOBS", "").strip()
+    if max_jobs_raw:
+        try:
+            max_jobs = int(max_jobs_raw)
+            if max_jobs < 1:
+                _fail(f"MAX_CONCURRENT_FORENSIC_JOBS={max_jobs_raw!r} must be >= 1")
+            else:
+                _ok(f"MAX_CONCURRENT_FORENSIC_JOBS={max_jobs}  (worker thread pool cap)")
+        except ValueError:
+            _fail(f"MAX_CONCURRENT_FORENSIC_JOBS={max_jobs_raw!r} is not a valid integer")
+    else:
+        _warn(
+            "MAX_CONCURRENT_FORENSIC_JOBS is not set. "
+            "Defaults to MAX_WORKERS (4). Set to limit concurrent plugin threads."
+        )
+
+    mem_raw = os.environ.get("PROCESS_MEM_LIMIT_MB", "").strip()
+    if mem_raw:
+        try:
+            mem_mb = int(mem_raw)
+            if mem_mb < 64:
+                _warn(f"PROCESS_MEM_LIMIT_MB={mem_mb} is very low (< 64 MB) — plugins may OOM")
+            else:
+                _ok(f"PROCESS_MEM_LIMIT_MB={mem_mb}  (soft memory budget per analysis session)")
+        except ValueError:
+            _fail(f"PROCESS_MEM_LIMIT_MB={mem_raw!r} is not a valid integer")
+    else:
+        _warn(
+            "PROCESS_MEM_LIMIT_MB is not set. No memory budget enforced. "
+            "Set to a value in MB to enable governance logging."
+        )
+
+
 def check_server_entrypoint() -> None:
-    print(f"\n{_BOLD}[8/8] Server Entrypoint{_RESET}")
+    print(f"\n{_BOLD}[8/10] Server Entrypoint{_RESET}")
 
     server_file = _project_root() / "server" / "mcp_vol_server.py"
     if not server_file.exists():
@@ -346,6 +413,7 @@ def check_server_entrypoint() -> None:
 # ── main ─────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    storage = os.environ.get("SIFT_BRIDGE_STORAGE", "/tmp/sift_bridge_runtime (default)")
     print(
         f"{_BOLD}{'=' * 63}\n"
         f"  Protocol-SIFT-Async-Bridge — Pre-Flight Environment Check\n"
@@ -353,6 +421,9 @@ def main() -> None:
         f"  Python interpreter : {sys.executable}\n"
         f"  Working directory  : {Path.cwd()}\n"
         f"  Project root       : {_project_root()}\n"
+        f"  Storage root       : {storage}\n"
+        f"  Max forensic jobs  : {os.environ.get('MAX_CONCURRENT_FORENSIC_JOBS', 'unset (default 4)')}\n"
+        f"  Mem limit (MB)     : {os.environ.get('PROCESS_MEM_LIMIT_MB', 'unset (unlimited)')}\n"
     )
 
     check_python_version()
@@ -363,6 +434,8 @@ def main() -> None:
     check_vol3_bin_env()
     check_log_directory()
     check_server_entrypoint()
+    check_sift_storage()
+    check_resource_governance()
 
     print(f"\n{'─' * 63}")
 

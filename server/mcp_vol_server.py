@@ -13,6 +13,7 @@ Architectural invariants (enforced in code, not prompts):
 
 from __future__ import annotations
 
+import gzip
 import json
 import logging
 import os
@@ -134,6 +135,20 @@ VOL3_BIN: str = os.environ.get("VOL3_BIN", "vol")
 MAX_OUTPUT_LINES: int = int(os.environ.get("MAX_OUTPUT_LINES", "120"))
 PLUGIN_TIMEOUT_SECS: int = int(os.environ.get("PLUGIN_TIMEOUT_SECS", "180"))
 MAX_WORKERS: int = int(os.environ.get("MAX_WORKERS", "4"))
+# Resource governance — override MAX_WORKERS with the forensic-specific cap
+MAX_CONCURRENT_FORENSIC_JOBS: int = int(
+    os.environ.get("MAX_CONCURRENT_FORENSIC_JOBS", str(MAX_WORKERS))
+)
+# Soft memory budget (MB) logged at startup; 0 = no limit enforced
+PROCESS_MEM_LIMIT_MB: int = int(os.environ.get("PROCESS_MEM_LIMIT_MB", "0"))
+
+# ---------------------------------------------------------------------------
+# Storage — job output written to disk (compressed) instead of kept in RAM
+# ---------------------------------------------------------------------------
+SIFT_BRIDGE_STORAGE: Path = Path(
+    os.environ.get("SIFT_BRIDGE_STORAGE", "/tmp/sift_bridge_runtime")
+)
+SIFT_BRIDGE_STORAGE.mkdir(parents=True, exist_ok=True)
 
 
 class JobStatus(str, Enum):
@@ -163,11 +178,12 @@ class JobRecord:
 
 
 _job_registry: dict[str, JobRecord] = {}
-# Full stripped lines per completed job — never returned via check_job_status
-# (that path is truncated); only accessible via read_job_output_page.
-_raw_output_registry: dict[str, list[str]] = {}
+# Tracks which truncated jobs have been fully exhausted via read_job_output_page
+_fully_paged_jobs: set[str] = set()
 _registry_lock = threading.Lock()
-_executor = ThreadPoolExecutor(max_workers=MAX_WORKERS, thread_name_prefix="vol-worker")
+_executor = ThreadPoolExecutor(
+    max_workers=MAX_CONCURRENT_FORENSIC_JOBS, thread_name_prefix="vol-worker"
+)
 
 
 def _get_job(job_id: str) -> Optional[JobRecord]:
@@ -181,6 +197,49 @@ def _update_job(job_id: str, **kwargs: Any) -> None:
         if record:
             for k, v in kwargs.items():
                 setattr(record, k, v)
+
+
+# ---------------------------------------------------------------------------
+# Disk-based job output storage  (replaces in-RAM _raw_output_registry)
+# Each completed job gets its own directory under SIFT_BRIDGE_STORAGE so
+# the host process never holds unbounded forensic data in heap memory.
+# ---------------------------------------------------------------------------
+
+def _job_output_dir(job_id: str) -> Path:
+    return SIFT_BRIDGE_STORAGE / "jobs" / job_id
+
+
+def _job_output_path(job_id: str) -> Path:
+    return _job_output_dir(job_id) / "raw_output.txt.gz"
+
+
+def _write_job_output(job_id: str, lines: list[str]) -> bool:
+    """Compress and write full plugin output lines to disk. Returns True on success."""
+    out_dir = _job_output_dir(job_id)
+    try:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / "raw_output.txt.gz"
+        with gzip.open(out_path, "wt", encoding="utf-8") as fh:
+            fh.write("\n".join(lines))
+        logger.info("Job %s: %d lines → %s", job_id, len(lines), out_path)
+        return True
+    except OSError as exc:
+        logger.error("Job %s: disk write failed: %s", job_id, exc)
+        return False
+
+
+def _read_job_output(job_id: str) -> list[str]:
+    """Read and decompress stored plugin output lines from disk."""
+    out_path = _job_output_path(job_id)
+    if not out_path.exists():
+        return []
+    try:
+        with gzip.open(out_path, "rt", encoding="utf-8") as fh:
+            content = fh.read()
+        return content.splitlines() if content else []
+    except (OSError, gzip.BadGzipFile) as exc:
+        logger.error("Job %s: disk read failed: %s", job_id, exc)
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -330,10 +389,9 @@ def _run_volatility(job_id: str) -> None:
 
     # Parse and truncate  (ARCH RULE 3)
     raw_output = result.stdout + (f"\n[STDERR]\n{result.stderr}" if result.stderr.strip() else "")
-    # Store the full cleaned line list for paging BEFORE truncation is applied
+    # Write full cleaned lines to disk (compressed) — never kept in heap RAM
     full_lines = _strip_vol_lines(raw_output)
-    with _registry_lock:
-        _raw_output_registry[job_id] = full_lines
+    _write_job_output(job_id, full_lines)
     summary, row_count, truncated = _parse_vol_output(raw_output)
 
     _update_job(
@@ -573,8 +631,7 @@ def read_job_output_page(job_id: str, page_number: int = 1) -> dict[str, Any]:
             )
         }
 
-    with _registry_lock:
-        all_lines = _raw_output_registry.get(job_id, [])
+    all_lines = _read_job_output(job_id)
 
     if not all_lines:
         return {
@@ -616,6 +673,11 @@ def read_job_output_page(job_id: str, page_number: int = 1) -> dict[str, Any]:
     end_idx = min(start_idx + page_size, total_data_rows)
     page_lines = data_lines[start_idx:end_idx]
     has_more = end_idx < total_data_rows
+
+    # Record that this job's output has been fully exhausted
+    if not has_more:
+        with _registry_lock:
+            _fully_paged_jobs.add(job_id)
 
     content_parts = ([header_line] if header_line else []) + page_lines
     page_content = "\n".join(content_parts)
@@ -709,11 +771,100 @@ def get_plugin_help(plugin_slug: str) -> dict[str, Any]:
     return {"plugin_slug": plugin_slug, "volatility_fqn": plugin_fqn, "help": trimmed}
 
 
+@mcp.tool()
+def generate_incident_report(image_slug: str) -> dict[str, Any]:
+    """
+    Compile a final incident report for a forensic case image.
+
+    PROTOCOL GATE: This tool is blocked at the server layer if any completed
+    jobs for the requested image have truncated output that has NOT been
+    exhausted via read_job_output_page (has_more=False).  The agent cannot
+    guess or skip evidence — it must page every truncated stream to
+    completion before a report is accepted.
+
+    Args:
+        image_slug: Key from list_case_images().
+
+    Returns:
+        status=REPORT_READY with findings summary, OR
+        status=PROTOCOL_ERROR with the offending job_id(s).
+    """
+    if image_slug not in CASE_REGISTRY:
+        return {
+            "error": f"Unknown image_slug '{image_slug}'. "
+                     f"Call list_case_images() for valid options.",
+        }
+
+    with _registry_lock:
+        complete_jobs = [
+            r for r in _job_registry.values()
+            if r.image_slug == image_slug and r.status == JobStatus.COMPLETE
+        ]
+        unexplored = [
+            r for r in complete_jobs
+            if r.truncated and r.job_id not in _fully_paged_jobs
+        ]
+
+    if unexplored:
+        blocking_id = unexplored[0].job_id
+        _write_trace({
+            "event": "tool_call",
+            "tool": "generate_incident_report",
+            "image_slug": image_slug,
+            "blocked_by": blocking_id,
+        })
+        return {
+            "status": "PROTOCOL_ERROR",
+            "error": (
+                f"Cannot compile final report. Unexplored truncated evidence "
+                f"streams exist for Job ID {blocking_id}. The agent must "
+                f"exhaustively audit remaining rows via pagination before "
+                f"generating conclusions."
+            ),
+            "unexplored_job_ids": [r.job_id for r in unexplored],
+        }
+
+    findings = []
+    for r in complete_jobs:
+        findings.append({
+            "job_id": r.job_id,
+            "plugin_slug": r.plugin_slug,
+            "row_count": r.row_count,
+            "truncated": r.truncated,
+            "fully_explored": (not r.truncated) or (r.job_id in _fully_paged_jobs),
+            "disk_output": str(_job_output_path(r.job_id)),
+            "output_summary": r.output_summary,
+        })
+
+    report = {
+        "status": "REPORT_READY",
+        "image_slug": image_slug,
+        "total_complete_jobs": len(complete_jobs),
+        "findings": findings,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _write_trace({
+        "event": "tool_call",
+        "tool": "generate_incident_report",
+        "image_slug": image_slug,
+        "status": "REPORT_READY",
+        "total_jobs": len(complete_jobs),
+    })
+    return report
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     logger.info("Starting Protocol-SIFT-Async-Bridge")
     logger.info("Registered case images: %s", list(CASE_REGISTRY.keys()))
+    logger.info("Storage root: %s", SIFT_BRIDGE_STORAGE)
+    logger.info(
+        "Resource caps: max_jobs=%d  mem_limit_mb=%s  timeout_secs=%d",
+        MAX_CONCURRENT_FORENSIC_JOBS,
+        PROCESS_MEM_LIMIT_MB if PROCESS_MEM_LIMIT_MB else "unlimited",
+        PLUGIN_TIMEOUT_SECS,
+    )
     logger.info("Trace log: %s", _log_file)
     mcp.run(transport="stdio")
