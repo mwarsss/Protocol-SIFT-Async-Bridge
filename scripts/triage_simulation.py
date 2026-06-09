@@ -122,6 +122,7 @@ def _tool_call(name: str, arguments: dict) -> tuple[int, dict]:
         "list_available_plugins":   server_mod.list_available_plugins,
         "launch_volatility_plugin": server_mod.launch_volatility_plugin,
         "check_job_status":         server_mod.check_job_status,
+        "read_job_output_page":     server_mod.read_job_output_page,
         "list_active_jobs":         server_mod.list_active_jobs,
         "get_plugin_help":          server_mod.get_plugin_help,
     }[name]
@@ -271,7 +272,8 @@ def run_simulation() -> None:
             {"name": "list_case_images",         "description": "Read-only case image registry"},
             {"name": "list_available_plugins",   "description": "Plugin allow-list"},
             {"name": "launch_volatility_plugin", "description": "Async plugin dispatch → job_id"},
-            {"name": "check_job_status",         "description": "Poll job status + output"},
+            {"name": "check_job_status",         "description": "Poll job status + output (capped at MAX_OUTPUT_LINES)"},
+            {"name": "read_job_output_page",     "description": "Page through full untruncated job output"},
             {"name": "list_active_jobs",         "description": "Session job overview"},
             {"name": "get_plugin_help",          "description": "Synchronous plugin --help"},
         ]
@@ -323,8 +325,51 @@ def run_simulation() -> None:
 
     if truncated:
         print(f"\n  {_c(YELLOW, '⚠ TRUNCATION DETECTED')} — output capped at {row_count} rows.")
-        print(f"  {_c(YELLOW, '  240 rows dropped.')}  Malware at row 290 is NOT visible.")
-        print(f"  {_c(CYAN, '  Recovery: run cmdline / netscan with --pid on suspicious PIDs.')}")
+        print(f"  {_c(YELLOW, '  240 rows dropped.')}  Malware at row 290 is NOT visible yet.")
+        print(f"  {_c(CYAN, '  Self-Correction: paging full pslist via read_job_output_page...')}")
+
+        _banner("Phase 1b — Self-Correction: Iterative Paging to Recover Truncated Rows")
+
+        # Page 1 is already contained in check_job_status output_summary.
+        # Read pages 2 onward until has_more=false to surface PID 9321 at row 290.
+        page = 2
+        anomaly_page: int | None = None
+        while True:
+            _, page_result = _tool_call(
+                "read_job_output_page", {"job_id": job1, "page_number": page}
+            )
+            has_more = page_result.get("has_more", False)
+            content = page_result.get("page_content", "")
+            total_pages = page_result.get("total_pages", "?")
+            _log(
+                f"read_job_output_page p{page}",
+                f"page={_c(CYAN, str(page))}/{total_pages}  "
+                f"has_more={_c(YELLOW if has_more else GREEN, str(has_more))}",
+            )
+            # Surface the anomalous entry when encountered
+            if anomaly_page is None:
+                for line in content.splitlines():
+                    if "9321" in line and "svchost" in line:
+                        anomaly_page = page
+                        _log(
+                            "anomaly surfaced",
+                            _c(RED, f"PID 9321 detected on page {page} — "
+                                    f"svchost.exe with explorer.exe parent"),
+                        )
+                        print(f"  {_c(RED, '  ►')} {line}")
+                        break
+            if not has_more:
+                break
+            page += 1
+
+        if anomaly_page:
+            _log(
+                "self-correction complete",
+                _c(GREEN, f"Full pslist exhausted — anomaly surfaced on page {anomaly_page}. "
+                          f"Pivoting to targeted cmdline --pid 9321."),
+            )
+        else:
+            _log("paging complete", "no anomalies found in full process list")
 
     # ── Phase 2: Cmdline on anomalous PID (targeted, no truncation) ──────
     _banner("Phase 2 — Targeted cmdline (PID 9321 — anomalous svchost)")
