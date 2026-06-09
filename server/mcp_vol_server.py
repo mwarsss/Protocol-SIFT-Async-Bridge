@@ -901,7 +901,7 @@ def generate_incident_report(image_slug: str) -> dict[str, Any]:
             "truncated": r.truncated,
             "fully_explored": (not r.truncated) or (r.job_id in _fully_paged_jobs),
             "disk_output": str(_job_output_path(r.job_id)),
-            "output_summary": r.output_summary,
+            "output_summary": _wrap_evidence(r.output_summary) if r.output_summary else None,
         })
 
     report = {

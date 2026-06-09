@@ -459,25 +459,60 @@ python scripts/verify_env.py
 
 Expected output on a correctly configured system:
 ```
-============================================================
-  Protocol-SIFT-Async-Bridge  — Environment Verification
-  Storage root : /tmp/sift_bridge_runtime
-  Max forensic jobs : 4
-  Process mem limit : 0 MB (unlimited)
-============================================================
-[1/10] check_volatility_binary       ✓ PASS   vol found at /usr/local/bin/vol (3.7.0)
-[2/10] check_case_images             ✓ PASS   2 image(s) registered
-[3/10] check_image_paths             ✓ PASS   All 2 image path(s) exist and are readable
-[4/10] check_allowed_plugins         ✓ PASS   8 plugin(s) in allow-list
-[5/10] check_log_directory           ✓ PASS   logs/ is writable
-[6/10] check_python_version          ✓ PASS   Python 3.11.9
-[7/10] check_mcp_dependencies        ✓ PASS   mcp, fastmcp present
-[8/10] check_max_output_lines        ✓ PASS   MAX_OUTPUT_LINES=120 (20–500 range OK)
-[9/10] check_sift_storage            ✓ PASS   SIFT_BRIDGE_STORAGE writable, 108.4 GB free
-[10/10] check_resource_governance    ✓ PASS   MAX_CONCURRENT_FORENSIC_JOBS=4, PROCESS_MEM_LIMIT_MB=0
-============================================================
+===============================================================
+  Protocol-SIFT-Async-Bridge — Pre-Flight Environment Check
+===============================================================
+  Python interpreter : /usr/bin/python3
+  Working directory  : /path/to/Protocol-SIFT-Async-Bridge
+  Project root       : /path/to/Protocol-SIFT-Async-Bridge
+  Storage root       : /tmp/sift_bridge_runtime
+  Max forensic jobs  : 4
+  Mem limit (MB)     : 0
+
+[1/10] Python Version
+[+] Python 3.12.3  (>= 3.11 required)
+
+[2/10] Python Package Dependencies
+[+] mcp  (v1.27.2)
+[+] fastmcp  (v3.4.2)
+[+] pydantic  (v2.13.4)
+[+] anyio  (v4.13.0)
+[+] rich  (v15.0.0)
+[+] python-dotenv  (v1.2.2)
+[+] pytest  (v9.0.3)
+[+] pytest-asyncio  (v1.4.0)
+
+[3/10] Volatility 3 Binary
+[+] Volatility 3 at: /usr/local/bin/vol
+    Volatility 3 Framework 2.7.0
+
+[4/10] VOL_CASE_IMAGES — Case Image Registry
+[+] VOL_CASE_IMAGES parsed — 2 slug(s) registered
+
+[5/10] Registered Image Path Accessibility
+[+] 2/2 image(s) accessible
+
+[6/10] VOL3_BIN Environment Variable
+[+] VOL3_BIN='vol' → resolved to /usr/local/bin/vol
+
+[7/10] Log Directory Write Access
+[+] Log directory writable: /path/to/Protocol-SIFT-Async-Bridge/logs
+
+[8/10] Server Entrypoint
+[+] Server entrypoint present: server/mcp_vol_server.py
+[+] server/mcp_vol_server.py passes syntax check
+
+[9/10] SIFT_BRIDGE_STORAGE — Disk Output Root
+[+] SIFT_BRIDGE_STORAGE='/tmp/sift_bridge_runtime'
+[+] Storage root writable: /tmp/sift_bridge_runtime
+
+[10/10] Resource Governance Parameters
+[+] MAX_CONCURRENT_FORENSIC_JOBS=4  (worker thread pool cap)
+[+] PROCESS_MEM_LIMIT_MB=0  (soft memory budget per analysis session)
+
+───────────────────────────────────────────────────────────────
   Result: 10/10 checks passed — environment is READY
-============================================================
+───────────────────────────────────────────────────────────────
 ```
 
 ### Step 3 — Configure Case Images
