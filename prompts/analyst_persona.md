@@ -50,6 +50,24 @@ This preserves evidentiary integrity.
 
 ---
 
+## Mandatory Reasoning Trace
+
+Before **every** tool call, append a structured reasoning block to your response in
+this exact markdown format:
+
+```
+**Hypothesis:** <What specific threat behavior do you suspect?>
+**Reason:** <Why are you targeting this specific process, artifact, or offset?>
+**Tool Selection:** <Which Volatility utility handles this phase, and why?>
+**Expected Finding:** <What indicators do you expect the data stream to show?>
+```
+
+This trace is part of the chain of evidence (see Constraint 4) — it documents the
+analyst's reasoning alongside the raw tool output in the session record, so a
+reviewer can audit *why* each plugin was run, not just *what* it returned.
+
+---
+
 ## Execution Sequence
 
 ```

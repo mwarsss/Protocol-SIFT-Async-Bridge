@@ -11,6 +11,13 @@ Usage:
     python3 scripts/verify_env.py
     ./scripts/verify_env.py          # after chmod +x
 
+    SIMULATION_MODE=true python3 scripts/verify_env.py
+        Marks the Volatility-binary check (3) and image-path check (5) as
+        SKIPPED rather than failing/warning when no real binary or memory
+        image is present — matches the mocked subprocess layer used by
+        scripts/triage_simulation.py. Skipped checks are reported honestly
+        in the final tally, never as PASS.
+
 What is checked:
     1.  Python version  (>= 3.11 required)
     2.  All packages listed in requirements.txt
@@ -45,8 +52,15 @@ _DIM   = "" if _NO_COLOR else "\033[2m"
 _BOLD  = "" if _NO_COLOR else "\033[1m"
 _RESET = "" if _NO_COLOR else "\033[0m"
 
+# SIMULATION_MODE relaxes checks that require a live Volatility binary or real
+# memory images — both unavailable in CI / triage_simulation.py. It does NOT
+# mark those checks as PASSED; it marks them SKIPPED so the report stays honest
+# about what was actually verified.
+SIMULATION_MODE = os.getenv("SIMULATION_MODE", "false").lower() == "true"
+
 _errors   = 0
 _warnings = 0
+_skipped  = 0
 
 
 def _ok(msg: str) -> None:
@@ -63,6 +77,12 @@ def _warn(msg: str) -> None:
     global _warnings
     _warnings += 1
     print(f"{_YELLOW}[!]{_RESET} {msg}")
+
+
+def _skip(msg: str) -> None:
+    global _skipped
+    _skipped += 1
+    print(f"{_DIM}[~]{_RESET} {msg} {_DIM}(SIMULATION MODE — not verified){_RESET}")
 
 
 def _info(msg: str) -> None:
@@ -176,6 +196,10 @@ def check_volatility() -> None:
         candidate = "/opt/volatility3/vol.py"
 
     if not candidate:
+        if SIMULATION_MODE:
+            _skip("Volatility 3 binary not found.")
+            _info("triage_simulation.py mocks the subprocess layer — no real binary required.")
+            return
         _fail(
             "Volatility 3 binary not found. Install with: pip install volatility3  "
             "or set VOL3_BIN=/path/to/vol.py"
@@ -262,12 +286,21 @@ def check_image_paths() -> None:
         return
 
     accessible = 0
+    sim_skipped = 0
     for slug, path_str in registry.items():
         p = Path(path_str)
         if not p.is_absolute():
+            if SIMULATION_MODE:
+                _skip(f"  {slug!r}: path is relative ({path_str!r}).")
+                sim_skipped += 1
+                continue
             _warn(f"  {slug!r}: path is relative ({path_str!r}) — resolve to absolute path")
             continue
         if not p.exists():
+            if SIMULATION_MODE:
+                _skip(f"  {slug!r}: file not found at {p}.")
+                sim_skipped += 1
+                continue
             _warn(f"  {slug!r}: file not found at {p}")
             _info("  Path registered but missing — ok in CI, must exist for live analysis")
             continue
@@ -278,11 +311,14 @@ def check_image_paths() -> None:
         _ok(f"  {slug!r}: {p}  ({size_gb:.1f} GB, readable)")
         accessible += 1
 
+    if SIMULATION_MODE and sim_skipped:
+        _info("triage_simulation.py does not read these paths — image access not required.")
+
     if accessible == len(registry):
         _ok(f"All {accessible}/{len(registry)} image(s) accessible")
     elif accessible > 0:
         _warn(f"{accessible}/{len(registry)} image(s) accessible — others missing or unreadable")
-    else:
+    elif not SIMULATION_MODE:
         _warn(f"0/{len(registry)} image(s) accessible — analysis will fail until images are mounted")
 
 
@@ -438,6 +474,19 @@ def main() -> None:
     check_resource_governance()
 
     print(f"\n{'─' * 63}")
+
+    if SIMULATION_MODE and _errors == 0:
+        passed = 10 - _skipped - _warnings
+        print(
+            f"{_GREEN}{_BOLD}[+] {passed}/10 CHECKS PASSED, {_skipped} SKIPPED "
+            f"(SIMULATION MODE){_RESET}"
+            + (f", {_warnings} warning(s)" if _warnings else "")
+        )
+        print(
+            f"{_GREEN}    No live Volatility binary or memory image required — "
+            f"ready for scripts/triage_simulation.py{_RESET}"
+        )
+        sys.exit(0)
 
     if _errors == 0 and _warnings == 0:
         print(
