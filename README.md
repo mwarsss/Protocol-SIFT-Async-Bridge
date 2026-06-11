@@ -26,7 +26,7 @@ When a threat actor gains initial access, **the average breakout time to lateral
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    LLM / MCP Client                          │
+│                    LLM / MCP Client                         │
 │  (Claude, GPT-4o, etc. via Claude Code / custom harness)    │
 └────────────────────┬────────────────────────────────────────┘
                      │  JSON-RPC over stdio (MCP protocol)
@@ -57,8 +57,8 @@ When a threat actor gains initial access, **the average breakout time to lateral
 │  │ PGID Kill Groups   │  ┌──────────────────────────────┐   │
 │  │ Evidence Isolation │  │   Volatility 3 CLI           │   │
 │  └────────────────────┘  │   (vol -f /cases/...         │   │
-│                           │    windows.pslist...)        │   │
-└───────────────────────────┴──────────────────────────────┘
+│                          │    windows.pslist...)        │   │
+└──────────────────────────┴──────────────────────────────────┘
 ```
 
 ---
