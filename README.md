@@ -10,7 +10,7 @@
 
 ## The Problem This Solves
 
-When a threat actor gains initial access, **the average breakout time to lateral movement is under 60 seconds** in modern intrusion sets. Memory forensics with Volatility 3 is the highest-fidelity detection method — but it has three friction points that make LLM-assisted IR fragile:
+When a threat actor gains initial access, **the average breakout time to lateral movement is under 60 seconds** in modern intrusion sets. Memory forensics with Volatility 3 is the highest-fidelity detection method - but it has three friction points that make LLM-assisted IR fragile:
 
 | Friction Point | Consequence Without This Server |
 |---|---|
@@ -18,7 +18,7 @@ When a threat actor gains initial access, **the average breakout time to lateral
 | Raw plugin output is 1,000–50,000 lines | Floods the context window; degrades reasoning quality |
 | IR analysts want to feed the LLM a memory image path | Path handling in prompts creates evidence spoliation risk |
 
-**Protocol-SIFT-Async-Bridge** eliminates all three with architectural guarantees — not prompt guardrails.
+**Protocol-SIFT-Async-Bridge** eliminates all three with architectural guarantees - not prompt guardrails.
 
 ---
 
@@ -67,7 +67,7 @@ When a threat actor gains initial access, **the average breakout time to lateral
 
 These are **code-level invariants**, not prompt instructions.  They cannot be bypassed by a malicious prompt, a jailbreak, or a misconfigured system prompt.
 
-### Rule 1 — Zero Spoliation
+### Rule 1 - Zero Spoliation
 
 ```python
 # server/mcp_vol_server.py
@@ -85,18 +85,18 @@ LLM provides:  image_slug="/cases/../etc/passwd"  → rejected, key not in regis
 LLM provides:  image_slug="../../../../bin/bash"  → rejected  ✅
 ```
 
-### Rule 2 — Async Execution Engine
+### Rule 2 - Async Execution Engine
 
 ```python
 # server/mcp_vol_server.py
 _executor = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_FORENSIC_JOBS)
 
-# launch_volatility_plugin() — returns in < 5ms
+# launch_volatility_plugin() - returns in < 5ms
 job_id = str(uuid.uuid4())
 _executor.submit(_run_volatility, job_id)
 return {"job_id": job_id, "status": "pending", ...}
 
-# check_job_status() — returns in < 5ms
+# check_job_status() - returns in < 5ms
 record = _get_job(job_id)
 return asdict(record)   # status: pending | running | complete | failed | timeout
 ```
@@ -125,7 +125,7 @@ return asdict(record)   # status: pending | running | complete | failed | timeou
    → {"page_content": "...", "has_more": false}
 ```
 
-### Rule 3 — Context Safety (Output Truncation + Disk-Backed Paging)
+### Rule 3 - Context Safety (Output Truncation + Disk-Backed Paging)
 
 ```python
 # server/mcp_vol_server.py
@@ -149,16 +149,16 @@ def _parse_vol_output(raw: str) -> tuple[str, int, bool]:
 
 ## Security Architecture
 
-This section documents the three hard security controls introduced in the security hardening release. These controls operate at the **process and I/O boundary** — they are active regardless of LLM behavior, system prompt, or analyst instruction.
+This section documents the three hard security controls introduced in the security hardening release. These controls operate at the **process and I/O boundary** - they are active regardless of LLM behavior, system prompt, or analyst instruction.
 
-### Priority 1 — Disk Exhaustion Gate
+### Priority 1 - Disk Exhaustion Gate
 
 **Problem:** Volatility plugins that emit large outputs (e.g., `malfind` on a 32 GB image) can write hundreds of megabytes to the disk-backed output store. On a constrained SIFT workstation, this can starve the host OS, corrupt evidence captures in progress, or cause OOM kills.
 
 **Implementation:**
 
 ```python
-# server/mcp_vol_server.py — launch_volatility_plugin()
+# server/mcp_vol_server.py - launch_volatility_plugin()
 FORENSIC_MIN_DISK_BYTES: int = 5 * 1024 ** 3  # 5 GB hard floor
 
 disk = shutil.disk_usage(SIFT_BRIDGE_STORAGE)
@@ -173,20 +173,20 @@ if disk.free < FORENSIC_MIN_DISK_BYTES:
 
 **Behavior:**
 - Checked at every `launch_volatility_plugin` call before any subprocess is spawned.
-- Returns `RESOURCE_EXHAUSTED` immediately — no job is queued, no disk write occurs.
+- Returns `RESOURCE_EXHAUSTED` immediately - no job is queued, no disk write occurs.
 - The 5 GB threshold is a hard constant; it cannot be overridden by an environment variable or LLM argument.
 - Use `scripts/verify_env.py` to confirm storage health before beginning an investigation.
 
 ---
 
-### Priority 2 — PGID Kill Groups (Zombie-Free Timeout)
+### Priority 2 - PGID Kill Groups (Zombie-Free Timeout)
 
 **Problem:** When Volatility exceeds `PLUGIN_TIMEOUT_SECS`, calling `process.kill()` only sends SIGKILL to the main `vol` process. Child processes spawned by Volatility (symbol resolution helpers, decompressors) become orphaned zombies that continue consuming CPU, RAM, and file descriptors.
 
 **Implementation:**
 
 ```python
-# server/mcp_vol_server.py — _run_volatility()
+# server/mcp_vol_server.py - _run_volatility()
 process = subprocess.Popen(
     cmd,
     stdout=subprocess.PIPE,
@@ -209,13 +209,13 @@ except subprocess.TimeoutExpired:
 
 **Behavior:**
 - `preexec_fn=os.setsid` creates a new session for the Volatility process, making it the PGID leader.
-- On timeout, `os.killpg(SIGKILL)` sends SIGKILL to every process in the group simultaneously — no orphans.
+- On timeout, `os.killpg(SIGKILL)` sends SIGKILL to every process in the group simultaneously - no orphans.
 - Three-tier fallback: PGID kill → single process kill → silent pass (prevents the MCP server itself from crashing on permission edge cases).
 - After kill, `process.communicate()` drains any buffered pipe data to prevent the server thread from deadlocking.
 
 ---
 
-### Priority 3 — Evidence Stream Isolation
+### Priority 3 - Evidence Stream Isolation
 
 **Problem:** Memory forensics output is **attacker-controlled data**. A sophisticated threat actor can embed prompt injection payloads inside process names, registry values, command-line arguments, or network artifacts that Volatility surfaces verbatim. If this output is returned directly in the LLM context window, the LLM may interpret injected instructions as legitimate analyst directives.
 
@@ -238,8 +238,8 @@ def _wrap_evidence(raw: str) -> str:
 ```
 
 Applied in two places:
-- `check_job_status()` — wraps `output_summary` for every complete job
-- `read_job_output_page()` — wraps `page_content` for every output page
+- `check_job_status()` - wraps `output_summary` for every complete job
+- `read_job_output_page()` - wraps `page_content` for every output page
 
 **Every response containing Volatility output carries this structure:**
 
@@ -255,16 +255,16 @@ PID    PPID   ImageFileName
 **Why this works:**
 - The security notice appears **before** attacker-controlled data in the token stream. This primes the model's attention to treat subsequent content as untrusted literals.
 - The `<untrusted_evidence_stream>` XML tags create a **structural boundary** that supports role-separation in models that process XML-aware system prompts.
-- The notice is prepended by the server at the code level — it cannot be removed or modified by the LLM, analyst, or attacker.
+- The notice is prepended by the server at the code level - it cannot be removed or modified by the LLM, analyst, or attacker.
 
 ---
 
-## Protocol Gate — `generate_incident_report`
+## Protocol Gate - `generate_incident_report`
 
 The `generate_incident_report` tool enforces **mandatory evidence review** before a case can be closed. It rejects report generation if any completed job had truncated output that was not fully paged through.
 
 ```python
-# Blocked — analyst skipped paging on truncated job
+# Blocked - analyst skipped paging on truncated job
 generate_incident_report("case-irc-beacon-win10")
 → {
     "status": "PROTOCOL_ERROR",
@@ -272,7 +272,7 @@ generate_incident_report("case-irc-beacon-win10")
     "unpaged_job_ids": ["job-abc-123"]
   }
 
-# Allowed — all truncated output has been paged
+# Allowed - all truncated output has been paged
 generate_incident_report("case-irc-beacon-win10")
 → {
     "status": "REPORT_READY",
@@ -301,7 +301,7 @@ This table distinguishes what is enforced by the **server code** vs. what is del
 | Disk exhaustion gate | `shutil.disk_usage()` check at every launch call | ❌ No |
 | Evidence stream isolation | `_wrap_evidence()` applied in server code | ❌ No |
 | Paging gate (incident report) | `generate_incident_report` protocol check | ❌ No |
-| Write access to evidence | Not exposed — no write tools exist | ❌ No |
+| Write access to evidence | Not exposed - no write tools exist | ❌ No |
 | Lateral plugin (e.g. dumpfiles path) | `--output-dir` not in args → analyst sets at deploy time | ✅ Prompt guidance only |
 | Investigation strategy | System prompt / LLM reasoning | ✅ Prompt guidance only |
 | Report format | System prompt / LLM reasoning | ✅ Prompt guidance only |
@@ -369,7 +369,7 @@ Returns the curated allow-list of Volatility 3 plugins.
 ```
 
 ### `launch_volatility_plugin(image_slug, plugin_slug, extra_args?)`
-Queues a plugin run. Returns a `job_id` immediately — never blocks. Returns `RESOURCE_EXHAUSTED` if disk free space is below 5 GB.
+Queues a plugin run. Returns a `job_id` immediately - never blocks. Returns `RESOURCE_EXHAUSTED` if disk free space is below 5 GB.
 ```json
 {
   "job_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
@@ -412,10 +412,10 @@ Pages through the full disk-backed output for a completed job. Each page is 120 
 ```
 
 ### `list_active_jobs()`
-Situational awareness — lists all jobs in the current session.
+Situational awareness - lists all jobs in the current session.
 
 ### `get_plugin_help(plugin_slug)`
-Synchronous `vol <plugin> --help` — returns usage info without loading an image.
+Synchronous `vol <plugin> --help` - returns usage info without loading an image.
 
 ### `generate_incident_report(image_slug)`
 Produces an investigation summary. **Blocked** with `PROTOCOL_ERROR` if any complete job for the image has truncated output that has not been fully paged through `read_job_output_page`. This enforces that the analyst cannot close a case based on partial evidence.
@@ -431,18 +431,18 @@ Produces an investigation summary. **Blocked** with `PROTOCOL_ERROR` if any comp
 
 ---
 
-## Try It Out — Local Execution
+## Try It Out - Local Execution
 
 ### Prerequisites
 
 - Python 3.11+
 - Volatility 3 installed: `pip install volatility3 "capstone<6"` or see [Volatility 3 docs](https://volatility3.readthedocs.io/)
-  (volatility3 2.28.0's disassembly renderer crashes under capstone 6.x — `windows.malfind` and any
+  (volatility3 2.28.0's disassembly renderer crashes under capstone 6.x - `windows.malfind` and any
   plugin that renders disassembly will fail with `AttributeError: module 'capstone' has no attribute
   'CS_ARCH_ARM64'` unless capstone is pinned below 6.)
 - A memory image file (`.raw`, `.vmem`, `.lime`, etc.)
 
-### Step 1 — Install Dependencies
+### Step 1 - Install Dependencies
 
 ```bash
 git clone https://github.com/yourorg/Protocol-SIFT-Async-Bridge
@@ -452,7 +452,7 @@ source .venv/bin/activate       # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### Step 2 — Validate Your Environment
+### Step 2 - Validate Your Environment
 
 Run the pre-flight check before starting any investigation. It validates all 11 required conditions:
 
@@ -463,7 +463,7 @@ python scripts/verify_env.py
 Expected output on a correctly configured system:
 ```
 ===============================================================
-  Protocol-SIFT-Async-Bridge — Pre-Flight Environment Check
+  Protocol-SIFT-Async-Bridge - Pre-Flight Environment Check
 ===============================================================
   Python interpreter : /usr/bin/python3
   Working directory  : /path/to/Protocol-SIFT-Async-Bridge
@@ -489,8 +489,8 @@ Expected output on a correctly configured system:
 [+] Volatility 3 at: /usr/local/bin/vol
     Volatility 3 Framework 2.7.0
 
-[4/11] VOL_CASE_IMAGES — Case Image Registry
-[+] VOL_CASE_IMAGES parsed — 2 slug(s) registered
+[4/11] VOL_CASE_IMAGES - Case Image Registry
+[+] VOL_CASE_IMAGES parsed - 2 slug(s) registered
 
 [5/11] Registered Image Path Accessibility
 [+] 2/2 image(s) accessible
@@ -505,7 +505,7 @@ Expected output on a correctly configured system:
 [+] Server entrypoint present: server/mcp_vol_server.py
 [+] server/mcp_vol_server.py passes syntax check
 
-[9/11] SIFT_BRIDGE_STORAGE — Disk Output Root
+[9/11] SIFT_BRIDGE_STORAGE - Disk Output Root
 [+] SIFT_BRIDGE_STORAGE='/tmp/sift_bridge_runtime'
 [+] Storage root writable: /tmp/sift_bridge_runtime
 
@@ -517,11 +517,11 @@ Expected output on a correctly configured system:
 [+] Volatility 3 Symbol Tables cached locally (Offline Execution Ready)
 
 ───────────────────────────────────────────────────────────────
-  Result: 11/11 checks passed — environment is READY
+  Result: 11/11 checks passed - environment is READY
 ───────────────────────────────────────────────────────────────
 ```
 
-### Step 3 — Configure Case Images
+### Step 3 - Configure Case Images
 
 Set the `VOL_CASE_IMAGES` environment variable pointing to your memory images:
 
@@ -542,9 +542,9 @@ MAX_CONCURRENT_FORENSIC_JOBS=4
 PROCESS_MEM_LIMIT_MB=512
 ```
 
-> **Without real images:** The server starts and all tools work — `list_case_images()` will report `path_exists: false`, and `launch_volatility_plugin` will fail with a Volatility error. The async job loop and all other tools function normally for testing.
+> **Without real images:** The server starts and all tools work - `list_case_images()` will report `path_exists: false`, and `launch_volatility_plugin` will fail with a Volatility error. The async job loop and all other tools function normally for testing.
 
-### Step 4 — Register with Claude Code (stdio transport)
+### Step 4 - Register with Claude Code (stdio transport)
 
 Add to your Claude Code MCP configuration (`~/.claude/mcp.json` or project `.mcp.json`):
 
@@ -569,13 +569,13 @@ Add to your Claude Code MCP configuration (`~/.claude/mcp.json` or project `.mcp
 
 Restart Claude Code and verify the server is visible with `/mcp`.
 
-### Step 5 — Run the Test Suite (No Volatility or Images Required)
+### Step 5 - Run the Test Suite (No Volatility or Images Required)
 
 ```bash
 pytest tests/ -v
 ```
 
-Expected output: **48/48 tests passing**
+Expected output: **51/51 tests passing**
 ```
 tests/test_async_job_loop.py::TestOutputParser::test_tabular_output_truncated_at_max_lines PASSED
 tests/test_async_job_loop.py::TestOutputParser::test_empty_output_handled PASSED
@@ -583,10 +583,48 @@ tests/test_async_job_loop.py::TestOutputParser::test_empty_output_handled PASSED
 tests/test_failure_modes.py::TestDiskSlicing::test_disk_gate_blocks_launch PASSED
 tests/test_failure_modes.py::TestEvidenceIsolation::test_output_summary_wrapped PASSED
 ...
-48 passed in 3.21s
+51 passed in 3.21s
 ```
 
-### Step 6 — Run the Forensic Triage Simulation
+## Try It Locally Against Real Evidence (Reveal Walkthrough)
+
+This project was verified end-to-end against **CyberDefenders' "Reveal" lab** - a real 2GB Windows 10 memory snapshot of a host compromised via a phishing decoy → fileless PowerShell → WebDAV/rundll32 delivery → process injection → live C2 connection.
+
+### 1. Get the evidence
+
+Download the **"Reveal"** memory image from [CyberDefenders](https://cyberdefenders.org/) (free registration required - search their lab catalog for "Reveal"). Place the extracted `.dmp`/`.raw` file at:
+
+```bash
+mkdir -p cases
+cp /path/to/192-Reveal.dmp cases/reveal.dmp
+```
+
+### 2. Configure and verify
+
+```bash
+export VOL_CASE_IMAGES='{"reveal":"'"$(pwd)"'/cases/reveal.dmp"}'
+export VOL3_BIN=vol
+python3 scripts/verify_env.py
+```
+
+Should print `11/11 CHECKS PASSED` / `SYSTEM INTEGRITY EXCELLENT`, including symbol cache detection.
+
+### 3. Run the full investigation
+
+```bash
+python3 -u scripts/reveal_demo.py
+```
+
+This drives the real MCP server (FastMCP, async job queue, disk-backed pagination, protocol gate) end-to-end against the real image:
+
+- Phase 1 truncation (111-row pslist) → **protocol gate BLOCKS** `generate_incident_report`
+- Self-correction paging recovers PID 4120 (`wordpad.exe` decoy) and PID 3692 (hidden `powershell.exe`)
+- `pstree`/`cmdline` reveal the hidden PowerShell → WebDAV/rundll32 chain
+- `malfind` confirms 5 RWX injected memory regions
+- `netscan` confirms the live C2 connection to `45.9.74.32:8888`
+- Final `generate_incident_report` → `REPORT_READY`, all findings `fully_explored: true`
+
+### Step 6 - Run the Forensic Triage Simulation
 
 Run the full 7-phase simulation to verify all server behaviors end-to-end without a real memory image:
 
@@ -607,7 +645,7 @@ grep "SECURITY NOTICE" logs/triage_sim_*.jsonl | wc -l
 # Expected: 7
 ```
 
-### Step 7 — Example LLM Session
+### Step 7 - Example LLM Session
 
 With Claude Code connected to the server, a forensic investigation session looks like:
 
@@ -625,7 +663,7 @@ Claude: I'll start with a process list. Let me launch pslist first.
 → status: "complete", 47 processes, truncated: true
 
 [calls read_job_output_page("abc-123", page=1)]
-→ has_more: false — all output reviewed
+→ has_more: false - all output reviewed
 
 I can see process ID 4892 "svchost.exe" spawned from an unusual parent (explorer.exe
 rather than services.exe). Let me run malfind to check for injected code.
@@ -668,24 +706,24 @@ Edit `ALLOWED_PLUGINS` in `server/mcp_vol_server.py`:
 ```python
 ALLOWED_PLUGINS: dict[str, str] = {
     ...
-    # Add new plugins here — slug: fully-qualified Volatility 3 name
+    # Add new plugins here - slug: fully-qualified Volatility 3 name
     "vadinfo": "windows.vadinfo.VadInfo",
     "modules":  "windows.modules.Modules",
 }
 ```
 
-The slug is what the LLM uses. The FQN is what the server passes to the binary. This separation means the LLM cannot enumerate or execute arbitrary Volatility plugins — only what an analyst has explicitly approved.
+The slug is what the LLM uses. The FQN is what the server passes to the binary. This separation means the LLM cannot enumerate or execute arbitrary Volatility plugins - only what an analyst has explicitly approved.
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+MIT - see [LICENSE](LICENSE)
 
 ---
 
 ## Acknowledgements
 
-- [Volatility Foundation](https://volatilityfoundation.org/) — Volatility 3 memory forensics framework
-- [Anthropic MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) — Model Context Protocol server primitives
-- [SANS SIFT Workstation](https://www.sans.org/tools/sift-workstation/) — Forensic workstation this project is designed to integrate with
+- [Volatility Foundation](https://volatilityfoundation.org/) - Volatility 3 memory forensics framework
+- [Anthropic MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) - Model Context Protocol server primitives
+- [SANS SIFT Workstation](https://www.sans.org/tools/sift-workstation/) - Forensic workstation this project is designed to integrate with
