@@ -10,7 +10,7 @@
 
 ## The Problem This Solves
 
-When a threat actor gains initial access, **the average breakout time to lateral movement is under 60 seconds** in modern intrusion sets. Memory forensics with Volatility 3 is the highest-fidelity detection method  but it has three friction points that make LLM-assisted IR fragile:
+When a threat actor gains initial access, **the average breakout time to lateral movement is under 60 seconds** in modern intrusion sets. Memory forensics with Volatility 3 is the highest-fidelity detection method — but it has three friction points that make LLM-assisted IR fragile:
 
 | Friction Point | Consequence Without This Server |
 |---|---|
