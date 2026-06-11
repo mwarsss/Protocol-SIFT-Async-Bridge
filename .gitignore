@@ -1,4 +1,5 @@
 .venv/
+cases/
 __pycache__/
 *.pyc
 *.pyo

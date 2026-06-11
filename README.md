@@ -436,7 +436,10 @@ Produces an investigation summary. **Blocked** with `PROTOCOL_ERROR` if any comp
 ### Prerequisites
 
 - Python 3.11+
-- Volatility 3 installed: `pip install volatility3` or see [Volatility 3 docs](https://volatility3.readthedocs.io/)
+- Volatility 3 installed: `pip install volatility3 "capstone<6"` or see [Volatility 3 docs](https://volatility3.readthedocs.io/)
+  (volatility3 2.28.0's disassembly renderer crashes under capstone 6.x — `windows.malfind` and any
+  plugin that renders disassembly will fail with `AttributeError: module 'capstone' has no attribute
+  'CS_ARCH_ARM64'` unless capstone is pinned below 6.)
 - A memory image file (`.raw`, `.vmem`, `.lime`, etc.)
 
 ### Step 1 — Install Dependencies
