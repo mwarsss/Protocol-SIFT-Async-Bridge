@@ -57,8 +57,8 @@ When a threat actor gains initial access, **the average breakout time to lateral
 │  │ PGID Kill Groups   │  ┌──────────────────────────────┐   │
 │  │ Evidence Isolation │  │   Volatility 3 CLI           │   │
 │  └────────────────────┘  │   (vol -f /cases/...         │   │
-│                           │    windows.pslist...)       │   │
-└───────────────────────────┴─────────────────────────────┘
+│                          │    windows.pslist...)        │   │
+└──────────────────────────┴──────────────────────────────────┘
 ```
 
 ---
