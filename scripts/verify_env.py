@@ -30,6 +30,7 @@ What is checked:
     8.  Server entrypoint  — server/mcp_vol_server.py present
     9.  SIFT_BRIDGE_STORAGE — disk output root write-access
     10. Resource governance parameters (MAX_CONCURRENT_FORENSIC_JOBS, PROCESS_MEM_LIMIT_MB)
+    11. Volatility 3 symbol cache — local schema cache for offline execution
 """
 
 from __future__ import annotations
@@ -104,7 +105,7 @@ def _parse_version(ver_str: str) -> tuple[int, ...]:
 # ── check functions ──────────────────────────────────────────────────────────
 
 def check_python_version() -> None:
-    print(f"\n{_BOLD}[1/10] Python Version{_RESET}")
+    print(f"\n{_BOLD}[1/11] Python Version{_RESET}")
     major, minor = sys.version_info[:2]
     ver_str = f"{major}.{minor}.{sys.version_info.micro}"
     if (major, minor) >= (3, 11):
@@ -117,7 +118,7 @@ def check_python_version() -> None:
 
 
 def check_packages() -> None:
-    print(f"\n{_BOLD}[2/10] Python Package Dependencies{_RESET}")
+    print(f"\n{_BOLD}[2/11] Python Package Dependencies{_RESET}")
     req_file = _project_root() / "requirements.txt"
     if not req_file.exists():
         _fail(f"requirements.txt not found at {req_file}")
@@ -182,7 +183,7 @@ def check_packages() -> None:
 
 
 def check_volatility() -> None:
-    print(f"\n{_BOLD}[3/10] Volatility 3 Binary{_RESET}")
+    print(f"\n{_BOLD}[3/11] Volatility 3 Binary{_RESET}")
 
     # Resolve binary: check VOL3_BIN env var first, then PATH, then common paths
     vol3_bin = os.environ.get("VOL3_BIN", "").strip()
@@ -234,7 +235,7 @@ def check_case_images() -> None:
     fail json.loads() at startup.  This check is rewritten to match server
     behaviour.
     """
-    print(f"\n{_BOLD}[4/10] VOL_CASE_IMAGES — Case Image Registry{_RESET}")
+    print(f"\n{_BOLD}[4/11] VOL_CASE_IMAGES — Case Image Registry{_RESET}")
 
     raw = os.environ.get("VOL_CASE_IMAGES", "").strip()
     if not raw:
@@ -278,7 +279,7 @@ check_case_images._registry: dict = {}  # type: ignore[attr-defined]
 
 
 def check_image_paths() -> None:
-    print(f"\n{_BOLD}[5/10] Registered Image Path Accessibility{_RESET}")
+    print(f"\n{_BOLD}[5/11] Registered Image Path Accessibility{_RESET}")
 
     registry: dict = getattr(check_case_images, "_registry", {})
     if not registry:
@@ -323,7 +324,7 @@ def check_image_paths() -> None:
 
 
 def check_vol3_bin_env() -> None:
-    print(f"\n{_BOLD}[6/10] VOL3_BIN Environment Variable{_RESET}")
+    print(f"\n{_BOLD}[6/11] VOL3_BIN Environment Variable{_RESET}")
 
     vol3_bin = os.environ.get("VOL3_BIN", "").strip()
     if vol3_bin:
@@ -343,7 +344,7 @@ def check_vol3_bin_env() -> None:
 
 
 def check_log_directory() -> None:
-    print(f"\n{_BOLD}[7/10] Log Directory Write Access{_RESET}")
+    print(f"\n{_BOLD}[7/11] Log Directory Write Access{_RESET}")
 
     log_dir = _project_root() / "logs"
     try:
@@ -362,7 +363,7 @@ def check_log_directory() -> None:
 
 
 def check_sift_storage() -> None:
-    print(f"\n{_BOLD}[9/10] SIFT_BRIDGE_STORAGE — Disk Output Root{_RESET}")
+    print(f"\n{_BOLD}[9/11] SIFT_BRIDGE_STORAGE — Disk Output Root{_RESET}")
 
     raw = os.environ.get("SIFT_BRIDGE_STORAGE", "").strip()
     storage_path = Path(raw) if raw else Path("/tmp/sift_bridge_runtime")
@@ -391,7 +392,7 @@ def check_sift_storage() -> None:
 
 
 def check_resource_governance() -> None:
-    print(f"\n{_BOLD}[10/10] Resource Governance Parameters{_RESET}")
+    print(f"\n{_BOLD}[10/11] Resource Governance Parameters{_RESET}")
 
     max_jobs_raw = os.environ.get("MAX_CONCURRENT_FORENSIC_JOBS", "").strip()
     if max_jobs_raw:
@@ -426,8 +427,31 @@ def check_resource_governance() -> None:
         )
 
 
+def check_symbol_cache() -> None:
+    print(f"\n{_BOLD}[11/11] Symbol Cache Verification{_RESET}")
+
+    candidates = [
+        Path.home() / ".cache" / "volatility3",
+        Path("/home/mwars/.cache/volatility3"),
+    ]
+
+    for cache_dir in candidates:
+        if not cache_dir.is_dir() or not os.access(cache_dir, os.R_OK):
+            continue
+        cached = list(cache_dir.rglob("*"))
+        if any(p.is_file() for p in cached):
+            _ok("Volatility 3 Symbol Tables cached locally (Offline Execution Ready)")
+            _info(f"Cache directory: {cache_dir}  ({sum(1 for p in cached if p.is_file())} file(s))")
+            return
+
+    _warn(
+        "No Volatility 3 symbol cache found at ~/.cache/volatility3/. "
+        "First plugin run will download/build symbol tables (requires network)."
+    )
+
+
 def check_server_entrypoint() -> None:
-    print(f"\n{_BOLD}[8/10] Server Entrypoint{_RESET}")
+    print(f"\n{_BOLD}[8/11] Server Entrypoint{_RESET}")
 
     server_file = _project_root() / "server" / "mcp_vol_server.py"
     if not server_file.exists():
@@ -472,13 +496,14 @@ def main() -> None:
     check_server_entrypoint()
     check_sift_storage()
     check_resource_governance()
+    check_symbol_cache()
 
     print(f"\n{'─' * 63}")
 
     if SIMULATION_MODE and _errors == 0:
-        passed = 10 - _skipped - _warnings
+        passed = 11 - _skipped - _warnings
         print(
-            f"{_GREEN}{_BOLD}[+] {passed}/10 CHECKS PASSED, {_skipped} SKIPPED "
+            f"{_GREEN}{_BOLD}[+] {passed}/11 CHECKS PASSED, {_skipped} SKIPPED "
             f"(SIMULATION MODE){_RESET}"
             + (f", {_warnings} warning(s)" if _warnings else "")
         )

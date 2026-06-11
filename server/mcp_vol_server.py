@@ -662,7 +662,9 @@ def check_job_status(job_id: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def read_job_output_page(job_id: str, page_number: int = 1) -> dict[str, Any]:
+def read_job_output_page(
+    job_id: str, page_number: int = 1, filter_pattern: str = None
+) -> dict[str, Any]:
     """
     Page through the full (untruncated) output of a completed job.
 
@@ -676,8 +678,13 @@ def read_job_output_page(job_id: str, page_number: int = 1) -> dict[str, Any]:
     exactly as a senior analyst would.
 
     Args:
-        job_id:      UUID returned by launch_volatility_plugin.
-        page_number: 1-based page index (default: 1).
+        job_id:         UUID returned by launch_volatility_plugin.
+        page_number:    1-based page index (default: 1).
+        filter_pattern: Optional case-insensitive substring. When set, only
+                         rows containing this substring are paginated (the
+                         column header is still preserved). Use this to jump
+                         straight to a PID, IP address, or filename in a
+                         large output without paging through every row.
 
     Returns:
         page_content, page_number, total_pages, total_rows, has_more,
@@ -721,6 +728,11 @@ def read_job_output_page(job_id: str, page_number: int = 1) -> dict[str, Any]:
             break
 
     data_lines = all_lines[data_start:]
+
+    if filter_pattern:
+        needle = filter_pattern.lower()
+        data_lines = [ln for ln in data_lines if needle in ln.lower()]
+
     total_data_rows = len(data_lines)
     total_pages = max(1, (total_data_rows + page_size - 1) // page_size)
 

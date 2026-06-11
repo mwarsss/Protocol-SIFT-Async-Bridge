@@ -466,6 +466,39 @@ class TestPagingTool:
         assert "PID" in page2["page_content"]
         assert "ImageFileName" in page2["page_content"]
 
+    def test_filter_pattern_restricts_to_matching_rows(self):
+        """filter_pattern must narrow pagination to matching rows only."""
+        import server.mcp_vol_server as mod
+        job_id, _ = self._complete_job(mod, n_rows=50)
+
+        page = mod.read_job_output_page(job_id, page_number=1, filter_pattern="proc37")
+        assert "error" not in page
+        assert "proc37.exe" in page["page_content"]
+        assert "proc1.exe" not in page["page_content"]
+        assert page["total_rows"] == 1
+        assert page["total_pages"] == 1
+        assert page["has_more"] is False
+        # Header is still preserved for self-describing output
+        assert "PID" in page["page_content"]
+
+    def test_filter_pattern_is_case_insensitive(self):
+        """filter_pattern matching must ignore case."""
+        import server.mcp_vol_server as mod
+        job_id, _ = self._complete_job(mod, n_rows=50)
+
+        page = mod.read_job_output_page(job_id, page_number=1, filter_pattern="PROC37")
+        assert "proc37.exe" in page["page_content"]
+
+    def test_filter_pattern_no_matches_returns_empty_page(self):
+        """A filter_pattern with zero matches must not crash and report 0 rows."""
+        import server.mcp_vol_server as mod
+        job_id, _ = self._complete_job(mod, n_rows=50)
+
+        page = mod.read_job_output_page(job_id, page_number=1, filter_pattern="nonexistent-needle")
+        assert "error" not in page
+        assert page["total_rows"] == 0
+        assert page["has_more"] is False
+
 
 class TestTraceLogging:
     """Validate JSON-RPC traces are written to the logs/ directory."""

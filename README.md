@@ -325,7 +325,7 @@ Protocol-SIFT-Async-Bridge/
 │
 ├── scripts/
 │   ├── triage_simulation.py     ← Full 7-phase forensic simulation (JSON-RPC trace)
-│   └── verify_env.py            ← Pre-flight environment validation (10 checks)
+│   └── verify_env.py            ← Pre-flight environment validation (11 checks)
 │
 ├── docs/
 │   ├── architecture.md          ← Detailed architecture decisions
@@ -454,7 +454,7 @@ pip install -r requirements.txt
 
 ### Step 2 — Validate Your Environment
 
-Run the pre-flight check before starting any investigation. It validates all 10 required conditions:
+Run the pre-flight check before starting any investigation. It validates all 11 required conditions:
 
 ```bash
 python scripts/verify_env.py
@@ -472,10 +472,10 @@ Expected output on a correctly configured system:
   Max forensic jobs  : 4
   Mem limit (MB)     : 0
 
-[1/10] Python Version
+[1/11] Python Version
 [+] Python 3.12.3  (>= 3.11 required)
 
-[2/10] Python Package Dependencies
+[2/11] Python Package Dependencies
 [+] mcp  (v1.27.2)
 [+] fastmcp  (v3.4.2)
 [+] pydantic  (v2.13.4)
@@ -485,36 +485,39 @@ Expected output on a correctly configured system:
 [+] pytest  (v9.0.3)
 [+] pytest-asyncio  (v1.4.0)
 
-[3/10] Volatility 3 Binary
+[3/11] Volatility 3 Binary
 [+] Volatility 3 at: /usr/local/bin/vol
     Volatility 3 Framework 2.7.0
 
-[4/10] VOL_CASE_IMAGES — Case Image Registry
+[4/11] VOL_CASE_IMAGES — Case Image Registry
 [+] VOL_CASE_IMAGES parsed — 2 slug(s) registered
 
-[5/10] Registered Image Path Accessibility
+[5/11] Registered Image Path Accessibility
 [+] 2/2 image(s) accessible
 
-[6/10] VOL3_BIN Environment Variable
+[6/11] VOL3_BIN Environment Variable
 [+] VOL3_BIN='vol' → resolved to /usr/local/bin/vol
 
-[7/10] Log Directory Write Access
+[7/11] Log Directory Write Access
 [+] Log directory writable: /path/to/Protocol-SIFT-Async-Bridge/logs
 
-[8/10] Server Entrypoint
+[8/11] Server Entrypoint
 [+] Server entrypoint present: server/mcp_vol_server.py
 [+] server/mcp_vol_server.py passes syntax check
 
-[9/10] SIFT_BRIDGE_STORAGE — Disk Output Root
+[9/11] SIFT_BRIDGE_STORAGE — Disk Output Root
 [+] SIFT_BRIDGE_STORAGE='/tmp/sift_bridge_runtime'
 [+] Storage root writable: /tmp/sift_bridge_runtime
 
-[10/10] Resource Governance Parameters
+[10/11] Resource Governance Parameters
 [+] MAX_CONCURRENT_FORENSIC_JOBS=4  (worker thread pool cap)
 [+] PROCESS_MEM_LIMIT_MB=0  (soft memory budget per analysis session)
 
+[11/11] Symbol Cache Verification
+[+] Volatility 3 Symbol Tables cached locally (Offline Execution Ready)
+
 ───────────────────────────────────────────────────────────────
-  Result: 10/10 checks passed — environment is READY
+  Result: 11/11 checks passed — environment is READY
 ───────────────────────────────────────────────────────────────
 ```
 
