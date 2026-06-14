@@ -624,6 +624,14 @@ This drives the real MCP server (FastMCP, async job queue, disk-backed paginatio
 - `netscan` confirms the live C2 connection to `45.9.74.32:8888`
 - Final `generate_incident_report` → `REPORT_READY`, all findings `fully_explored: true`
 
+### 4. Sample execution trace
+
+A real JSON-RPC trace from this exact run (55 events: tool calls, job lifecycle,
+pagination, and the protocol gate block/recovery cycle) is committed at
+[`docs/sample_trace.jsonl`](docs/sample_trace.jsonl). It can be replayed against
+`docs/accuracy_report.md`'s Accuracy Self-Assessment section to verify that every
+claimed finding traces back to a specific `read_job_output_page` call.
+
 ### Step 6 - Run the Forensic Triage Simulation
 
 Run the full 7-phase simulation to verify all server behaviors end-to-end without a real memory image:
