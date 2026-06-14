@@ -1,55 +1,58 @@
-{"event": "tool_call", "tool": "list_case_images", "ts": "2026-06-13T16:40:28.651387+00:00"}
-{"event": "tool_call", "tool": "list_available_plugins", "ts": "2026-06-13T16:40:28.651561+00:00"}
-{"event": "job_started", "job_id": "c9ea859c-8aeb-4b95-9225-1b4d10fb2631", "plugin": "pslist", "image": "reveal", "ts": "2026-06-13T16:40:28.651916+00:00"}
-{"event": "tool_call", "tool": "launch_volatility_plugin", "job_id": "c9ea859c-8aeb-4b95-9225-1b4d10fb2631", "image_slug": "reveal", "plugin_slug": "pslist", "ts": "2026-06-13T16:40:28.652128+00:00"}
-{"event": "tool_call", "tool": "check_job_status", "job_id": "c9ea859c-8aeb-4b95-9225-1b4d10fb2631", "status": "running", "ts": "2026-06-13T16:40:28.652338+00:00"}
-{"event": "job_finished", "job_id": "c9ea859c-8aeb-4b95-9225-1b4d10fb2631", "returncode": 0, "rows_returned": 30, "was_truncated": true, "ts": "2026-06-13T16:40:30.506979+00:00"}
-{"event": "tool_call", "tool": "check_job_status", "job_id": "c9ea859c-8aeb-4b95-9225-1b4d10fb2631", "status": "complete", "ts": "2026-06-13T16:40:33.654601+00:00"}
-{"event": "tool_call", "tool": "generate_incident_report", "image_slug": "reveal", "blocked_by": "c9ea859c-8aeb-4b95-9225-1b4d10fb2631", "ts": "2026-06-13T16:40:33.654950+00:00"}
-{"event": "tool_call", "tool": "read_job_output_page", "job_id": "c9ea859c-8aeb-4b95-9225-1b4d10fb2631", "page_number": 1, "total_pages": 4, "has_more": true, "ts": "2026-06-13T16:40:33.655428+00:00"}
-{"event": "tool_call", "tool": "read_job_output_page", "job_id": "c9ea859c-8aeb-4b95-9225-1b4d10fb2631", "page_number": 2, "total_pages": 4, "has_more": true, "ts": "2026-06-13T16:40:33.655753+00:00"}
-{"event": "tool_call", "tool": "read_job_output_page", "job_id": "c9ea859c-8aeb-4b95-9225-1b4d10fb2631", "page_number": 3, "total_pages": 4, "has_more": true, "ts": "2026-06-13T16:40:33.656052+00:00"}
-{"event": "tool_call", "tool": "read_job_output_page", "job_id": "c9ea859c-8aeb-4b95-9225-1b4d10fb2631", "page_number": 4, "total_pages": 4, "has_more": false, "ts": "2026-06-13T16:40:33.656369+00:00"}
-{"event": "tool_call", "tool": "launch_volatility_plugin", "job_id": "9689b75c-4155-4dba-a305-77f6df554c32", "image_slug": "reveal", "plugin_slug": "pstree", "ts": "2026-06-13T16:40:33.656648+00:00"}
-{"event": "job_started", "job_id": "9689b75c-4155-4dba-a305-77f6df554c32", "plugin": "pstree", "image": "reveal", "ts": "2026-06-13T16:40:33.656698+00:00"}
-{"event": "tool_call", "tool": "check_job_status", "job_id": "9689b75c-4155-4dba-a305-77f6df554c32", "status": "running", "ts": "2026-06-13T16:40:33.656826+00:00"}
-{"event": "job_finished", "job_id": "9689b75c-4155-4dba-a305-77f6df554c32", "returncode": 0, "rows_returned": 30, "was_truncated": true, "ts": "2026-06-13T16:40:35.704649+00:00"}
-{"event": "tool_call", "tool": "check_job_status", "job_id": "9689b75c-4155-4dba-a305-77f6df554c32", "status": "complete", "ts": "2026-06-13T16:40:38.660786+00:00"}
-{"event": "tool_call", "tool": "read_job_output_page", "job_id": "9689b75c-4155-4dba-a305-77f6df554c32", "page_number": 1, "total_pages": 4, "has_more": true, "ts": "2026-06-13T16:40:38.663259+00:00"}
-{"event": "tool_call", "tool": "read_job_output_page", "job_id": "9689b75c-4155-4dba-a305-77f6df554c32", "page_number": 2, "total_pages": 4, "has_more": true, "ts": "2026-06-13T16:40:38.664987+00:00"}
-{"event": "tool_call", "tool": "read_job_output_page", "job_id": "9689b75c-4155-4dba-a305-77f6df554c32", "page_number": 3, "total_pages": 4, "has_more": true, "ts": "2026-06-13T16:40:38.667034+00:00"}
-{"event": "tool_call", "tool": "read_job_output_page", "job_id": "9689b75c-4155-4dba-a305-77f6df554c32", "page_number": 4, "total_pages": 4, "has_more": false, "ts": "2026-06-13T16:40:38.668768+00:00"}
-{"event": "tool_call", "tool": "launch_volatility_plugin", "job_id": "965e40f1-52bb-4a9f-a86c-f27890f07e8a", "image_slug": "reveal", "plugin_slug": "cmdline", "ts": "2026-06-13T16:40:38.669758+00:00"}
-{"event": "job_started", "job_id": "965e40f1-52bb-4a9f-a86c-f27890f07e8a", "plugin": "cmdline", "image": "reveal", "ts": "2026-06-13T16:40:38.669976+00:00"}
-{"event": "tool_call", "tool": "check_job_status", "job_id": "965e40f1-52bb-4a9f-a86c-f27890f07e8a", "status": "running", "ts": "2026-06-13T16:40:38.670558+00:00"}
-{"event": "job_finished", "job_id": "965e40f1-52bb-4a9f-a86c-f27890f07e8a", "returncode": 0, "rows_returned": 2, "was_truncated": false, "ts": "2026-06-13T16:40:40.401455+00:00"}
-{"event": "tool_call", "tool": "check_job_status", "job_id": "965e40f1-52bb-4a9f-a86c-f27890f07e8a", "status": "complete", "ts": "2026-06-13T16:40:43.680876+00:00"}
-{"event": "tool_call", "tool": "launch_volatility_plugin", "job_id": "0cc15788-9969-4442-ba96-a5968ae1d21f", "image_slug": "reveal", "plugin_slug": "malfind", "ts": "2026-06-13T16:40:43.682272+00:00"}
-{"event": "job_started", "job_id": "0cc15788-9969-4442-ba96-a5968ae1d21f", "plugin": "malfind", "image": "reveal", "ts": "2026-06-13T16:40:43.682483+00:00"}
-{"event": "tool_call", "tool": "check_job_status", "job_id": "0cc15788-9969-4442-ba96-a5968ae1d21f", "status": "running", "ts": "2026-06-13T16:40:43.683010+00:00"}
-{"event": "job_finished", "job_id": "0cc15788-9969-4442-ba96-a5968ae1d21f", "returncode": 0, "rows_returned": 30, "was_truncated": true, "ts": "2026-06-13T16:40:45.828363+00:00"}
-{"event": "tool_call", "tool": "check_job_status", "job_id": "0cc15788-9969-4442-ba96-a5968ae1d21f", "status": "complete", "ts": "2026-06-13T16:40:48.694102+00:00"}
-{"event": "tool_call", "tool": "read_job_output_page", "job_id": "0cc15788-9969-4442-ba96-a5968ae1d21f", "page_number": 1, "total_pages": 4, "has_more": true, "ts": "2026-06-13T16:40:48.694635+00:00"}
-{"event": "tool_call", "tool": "read_job_output_page", "job_id": "0cc15788-9969-4442-ba96-a5968ae1d21f", "page_number": 2, "total_pages": 4, "has_more": true, "ts": "2026-06-13T16:40:48.694894+00:00"}
-{"event": "tool_call", "tool": "read_job_output_page", "job_id": "0cc15788-9969-4442-ba96-a5968ae1d21f", "page_number": 3, "total_pages": 4, "has_more": true, "ts": "2026-06-13T16:40:48.695127+00:00"}
-{"event": "tool_call", "tool": "read_job_output_page", "job_id": "0cc15788-9969-4442-ba96-a5968ae1d21f", "page_number": 4, "total_pages": 4, "has_more": false, "ts": "2026-06-13T16:40:48.695419+00:00"}
-{"event": "tool_call", "tool": "launch_volatility_plugin", "job_id": "f4571950-f786-4f3e-a434-65e8eb52b4d0", "image_slug": "reveal", "plugin_slug": "netscan", "ts": "2026-06-13T16:40:48.695639+00:00"}
-{"event": "job_started", "job_id": "f4571950-f786-4f3e-a434-65e8eb52b4d0", "plugin": "netscan", "image": "reveal", "ts": "2026-06-13T16:40:48.695722+00:00"}
-{"event": "tool_call", "tool": "check_job_status", "job_id": "f4571950-f786-4f3e-a434-65e8eb52b4d0", "status": "running", "ts": "2026-06-13T16:40:48.695824+00:00"}
-{"event": "tool_call", "tool": "check_job_status", "job_id": "f4571950-f786-4f3e-a434-65e8eb52b4d0", "status": "running", "ts": "2026-06-13T16:40:53.699122+00:00"}
-{"event": "tool_call", "tool": "check_job_status", "job_id": "f4571950-f786-4f3e-a434-65e8eb52b4d0", "status": "running", "ts": "2026-06-13T16:40:58.699380+00:00"}
-{"event": "tool_call", "tool": "check_job_status", "job_id": "f4571950-f786-4f3e-a434-65e8eb52b4d0", "status": "running", "ts": "2026-06-13T16:41:03.699601+00:00"}
-{"event": "tool_call", "tool": "check_job_status", "job_id": "f4571950-f786-4f3e-a434-65e8eb52b4d0", "status": "running", "ts": "2026-06-13T16:41:08.699839+00:00"}
-{"event": "job_finished", "job_id": "f4571950-f786-4f3e-a434-65e8eb52b4d0", "returncode": 0, "rows_returned": 30, "was_truncated": true, "ts": "2026-06-13T16:41:11.590449+00:00"}
-{"event": "tool_call", "tool": "check_job_status", "job_id": "f4571950-f786-4f3e-a434-65e8eb52b4d0", "status": "complete", "ts": "2026-06-13T16:41:13.700149+00:00"}
-{"event": "tool_call", "tool": "read_job_output_page", "job_id": "f4571950-f786-4f3e-a434-65e8eb52b4d0", "page_number": 1, "total_pages": 3, "has_more": true, "ts": "2026-06-13T16:41:13.700737+00:00"}
-{"event": "tool_call", "tool": "read_job_output_page", "job_id": "f4571950-f786-4f3e-a434-65e8eb52b4d0", "page_number": 2, "total_pages": 3, "has_more": true, "ts": "2026-06-13T16:41:13.701037+00:00"}
-{"event": "tool_call", "tool": "read_job_output_page", "job_id": "f4571950-f786-4f3e-a434-65e8eb52b4d0", "page_number": 3, "total_pages": 3, "has_more": false, "ts": "2026-06-13T16:41:13.701319+00:00"}
-{"event": "tool_call", "tool": "launch_volatility_plugin", "job_id": "616f4245-a055-49ed-b1a8-3710292b4584", "image_slug": "reveal", "plugin_slug": "dlllist", "ts": "2026-06-13T16:41:13.701615+00:00"}
-{"event": "job_started", "job_id": "616f4245-a055-49ed-b1a8-3710292b4584", "plugin": "dlllist", "image": "reveal", "ts": "2026-06-13T16:41:13.701689+00:00"}
-{"event": "tool_call", "tool": "check_job_status", "job_id": "616f4245-a055-49ed-b1a8-3710292b4584", "status": "running", "ts": "2026-06-13T16:41:13.701857+00:00"}
-{"event": "job_finished", "job_id": "616f4245-a055-49ed-b1a8-3710292b4584", "returncode": 0, "rows_returned": 30, "was_truncated": true, "ts": "2026-06-13T16:41:15.776878+00:00"}
-{"event": "tool_call", "tool": "check_job_status", "job_id": "616f4245-a055-49ed-b1a8-3710292b4584", "status": "complete", "ts": "2026-06-13T16:41:18.705083+00:00"}
-{"event": "tool_call", "tool": "read_job_output_page", "job_id": "616f4245-a055-49ed-b1a8-3710292b4584", "page_number": 1, "total_pages": 2, "has_more": true, "ts": "2026-06-13T16:41:18.705608+00:00"}
-{"event": "tool_call", "tool": "read_job_output_page", "job_id": "616f4245-a055-49ed-b1a8-3710292b4584", "page_number": 2, "total_pages": 2, "has_more": false, "ts": "2026-06-13T16:41:18.705860+00:00"}
-{"event": "tool_call", "tool": "generate_incident_report", "image_slug": "reveal", "status": "REPORT_READY", "total_jobs": 6, "ts": "2026-06-13T16:41:18.706096+00:00"}
+{"event": "tool_call", "tool": "list_case_images", "ts": "2026-06-14T18:21:15.350257+00:00"}
+{"event": "tool_call", "tool": "list_available_plugins", "ts": "2026-06-14T18:21:15.350539+00:00"}
+{"event": "job_started", "job_id": "427be361-b35b-42ea-a0d3-8abbf80362b6", "plugin": "pslist", "image": "reveal", "ts": "2026-06-14T18:21:15.351079+00:00"}
+{"event": "tool_call", "tool": "launch_volatility_plugin", "job_id": "427be361-b35b-42ea-a0d3-8abbf80362b6", "image_slug": "reveal", "plugin_slug": "pslist", "ts": "2026-06-14T18:21:15.351121+00:00"}
+{"event": "tool_call", "tool": "check_job_status", "job_id": "427be361-b35b-42ea-a0d3-8abbf80362b6", "status": "running", "ts": "2026-06-14T18:21:15.354455+00:00"}
+{"event": "tool_call", "tool": "check_job_status", "job_id": "427be361-b35b-42ea-a0d3-8abbf80362b6", "status": "running", "ts": "2026-06-14T18:21:20.354883+00:00"}
+{"event": "job_finished", "job_id": "427be361-b35b-42ea-a0d3-8abbf80362b6", "returncode": 0, "rows_returned": 30, "was_truncated": true, "ts": "2026-06-14T18:21:24.949475+00:00"}
+{"event": "tool_call", "tool": "check_job_status", "job_id": "427be361-b35b-42ea-a0d3-8abbf80362b6", "status": "complete", "ts": "2026-06-14T18:21:25.355365+00:00"}
+{"event": "tool_call", "tool": "generate_incident_report", "image_slug": "reveal", "blocked_by": "427be361-b35b-42ea-a0d3-8abbf80362b6", "ts": "2026-06-14T18:21:25.356302+00:00"}
+{"event": "tool_call", "tool": "read_job_output_page", "job_id": "427be361-b35b-42ea-a0d3-8abbf80362b6", "page_number": 1, "total_pages": 4, "has_more": true, "ts": "2026-06-14T18:21:25.358095+00:00"}
+{"event": "tool_call", "tool": "read_job_output_page", "job_id": "427be361-b35b-42ea-a0d3-8abbf80362b6", "page_number": 2, "total_pages": 4, "has_more": true, "ts": "2026-06-14T18:21:25.359492+00:00"}
+{"event": "tool_call", "tool": "read_job_output_page", "job_id": "427be361-b35b-42ea-a0d3-8abbf80362b6", "page_number": 3, "total_pages": 4, "has_more": true, "ts": "2026-06-14T18:21:25.360760+00:00"}
+{"event": "tool_call", "tool": "read_job_output_page", "job_id": "427be361-b35b-42ea-a0d3-8abbf80362b6", "page_number": 4, "total_pages": 4, "has_more": false, "ts": "2026-06-14T18:21:25.361994+00:00"}
+{"event": "tool_call", "tool": "launch_volatility_plugin", "job_id": "180984c3-63cf-44bb-81df-28d56c13d07d", "image_slug": "reveal", "plugin_slug": "pstree", "ts": "2026-06-14T18:21:25.362869+00:00"}
+{"event": "job_started", "job_id": "180984c3-63cf-44bb-81df-28d56c13d07d", "plugin": "pstree", "image": "reveal", "ts": "2026-06-14T18:21:25.363069+00:00"}
+{"event": "tool_call", "tool": "check_job_status", "job_id": "180984c3-63cf-44bb-81df-28d56c13d07d", "status": "running", "ts": "2026-06-14T18:21:25.363468+00:00"}
+{"event": "job_finished", "job_id": "180984c3-63cf-44bb-81df-28d56c13d07d", "returncode": 0, "rows_returned": 30, "was_truncated": true, "ts": "2026-06-14T18:21:28.248879+00:00"}
+{"event": "tool_call", "tool": "check_job_status", "job_id": "180984c3-63cf-44bb-81df-28d56c13d07d", "status": "complete", "ts": "2026-06-14T18:21:30.371965+00:00"}
+{"event": "tool_call", "tool": "read_job_output_page", "job_id": "180984c3-63cf-44bb-81df-28d56c13d07d", "page_number": 1, "total_pages": 4, "has_more": true, "ts": "2026-06-14T18:21:30.374099+00:00"}
+{"event": "tool_call", "tool": "read_job_output_page", "job_id": "180984c3-63cf-44bb-81df-28d56c13d07d", "page_number": 2, "total_pages": 4, "has_more": true, "ts": "2026-06-14T18:21:30.375589+00:00"}
+{"event": "tool_call", "tool": "read_job_output_page", "job_id": "180984c3-63cf-44bb-81df-28d56c13d07d", "page_number": 3, "total_pages": 4, "has_more": true, "ts": "2026-06-14T18:21:30.376934+00:00"}
+{"event": "tool_call", "tool": "read_job_output_page", "job_id": "180984c3-63cf-44bb-81df-28d56c13d07d", "page_number": 4, "total_pages": 4, "has_more": false, "ts": "2026-06-14T18:21:30.378319+00:00"}
+{"event": "tool_call", "tool": "launch_volatility_plugin", "job_id": "aebafc1b-f409-416e-a32d-aef6b77b8287", "image_slug": "reveal", "plugin_slug": "cmdline", "ts": "2026-06-14T18:21:30.379092+00:00"}
+{"event": "job_started", "job_id": "aebafc1b-f409-416e-a32d-aef6b77b8287", "plugin": "cmdline", "image": "reveal", "ts": "2026-06-14T18:21:30.379310+00:00"}
+{"event": "tool_call", "tool": "check_job_status", "job_id": "aebafc1b-f409-416e-a32d-aef6b77b8287", "status": "running", "ts": "2026-06-14T18:21:30.379693+00:00"}
+{"event": "job_finished", "job_id": "aebafc1b-f409-416e-a32d-aef6b77b8287", "returncode": 0, "rows_returned": 2, "was_truncated": false, "ts": "2026-06-14T18:21:32.695461+00:00"}
+{"event": "tool_call", "tool": "check_job_status", "job_id": "aebafc1b-f409-416e-a32d-aef6b77b8287", "status": "complete", "ts": "2026-06-14T18:21:35.388051+00:00"}
+{"event": "tool_call", "tool": "launch_volatility_plugin", "job_id": "2421037e-0842-41c6-b295-2c1f3c327d57", "image_slug": "reveal", "plugin_slug": "malfind", "ts": "2026-06-14T18:21:35.389155+00:00"}
+{"event": "tool_call", "tool": "check_job_status", "job_id": "2421037e-0842-41c6-b295-2c1f3c327d57", "status": "pending", "ts": "2026-06-14T18:21:35.389480+00:00"}
+{"event": "job_started", "job_id": "2421037e-0842-41c6-b295-2c1f3c327d57", "plugin": "malfind", "image": "reveal", "ts": "2026-06-14T18:21:35.390176+00:00"}
+{"event": "job_finished", "job_id": "2421037e-0842-41c6-b295-2c1f3c327d57", "returncode": 0, "rows_returned": 30, "was_truncated": true, "ts": "2026-06-14T18:21:38.407219+00:00"}
+{"event": "tool_call", "tool": "check_job_status", "job_id": "2421037e-0842-41c6-b295-2c1f3c327d57", "status": "complete", "ts": "2026-06-14T18:21:40.390046+00:00"}
+{"event": "tool_call", "tool": "read_job_output_page", "job_id": "2421037e-0842-41c6-b295-2c1f3c327d57", "page_number": 1, "total_pages": 4, "has_more": true, "ts": "2026-06-14T18:21:40.392491+00:00"}
+{"event": "tool_call", "tool": "read_job_output_page", "job_id": "2421037e-0842-41c6-b295-2c1f3c327d57", "page_number": 2, "total_pages": 4, "has_more": true, "ts": "2026-06-14T18:21:40.393930+00:00"}
+{"event": "tool_call", "tool": "read_job_output_page", "job_id": "2421037e-0842-41c6-b295-2c1f3c327d57", "page_number": 3, "total_pages": 4, "has_more": true, "ts": "2026-06-14T18:21:40.395330+00:00"}
+{"event": "tool_call", "tool": "read_job_output_page", "job_id": "2421037e-0842-41c6-b295-2c1f3c327d57", "page_number": 4, "total_pages": 4, "has_more": false, "ts": "2026-06-14T18:21:40.396680+00:00"}
+{"event": "tool_call", "tool": "launch_volatility_plugin", "job_id": "f87be7a5-4dde-4a21-a780-4e96cfed8daf", "image_slug": "reveal", "plugin_slug": "netscan", "ts": "2026-06-14T18:21:40.397647+00:00"}
+{"event": "job_started", "job_id": "f87be7a5-4dde-4a21-a780-4e96cfed8daf", "plugin": "netscan", "image": "reveal", "ts": "2026-06-14T18:21:40.397838+00:00"}
+{"event": "tool_call", "tool": "check_job_status", "job_id": "f87be7a5-4dde-4a21-a780-4e96cfed8daf", "status": "running", "ts": "2026-06-14T18:21:40.398354+00:00"}
+{"event": "tool_call", "tool": "check_job_status", "job_id": "f87be7a5-4dde-4a21-a780-4e96cfed8daf", "status": "running", "ts": "2026-06-14T18:21:45.406607+00:00"}
+{"event": "tool_call", "tool": "check_job_status", "job_id": "f87be7a5-4dde-4a21-a780-4e96cfed8daf", "status": "running", "ts": "2026-06-14T18:21:50.406970+00:00"}
+{"event": "tool_call", "tool": "check_job_status", "job_id": "f87be7a5-4dde-4a21-a780-4e96cfed8daf", "status": "running", "ts": "2026-06-14T18:21:55.407256+00:00"}
+{"event": "tool_call", "tool": "check_job_status", "job_id": "f87be7a5-4dde-4a21-a780-4e96cfed8daf", "status": "running", "ts": "2026-06-14T18:22:00.407659+00:00"}
+{"event": "tool_call", "tool": "check_job_status", "job_id": "f87be7a5-4dde-4a21-a780-4e96cfed8daf", "status": "running", "ts": "2026-06-14T18:22:05.408014+00:00"}
+{"event": "tool_call", "tool": "check_job_status", "job_id": "f87be7a5-4dde-4a21-a780-4e96cfed8daf", "status": "running", "ts": "2026-06-14T18:22:10.408354+00:00"}
+{"event": "job_finished", "job_id": "f87be7a5-4dde-4a21-a780-4e96cfed8daf", "returncode": 0, "rows_returned": 30, "was_truncated": true, "ts": "2026-06-14T18:22:14.520462+00:00"}
+{"event": "tool_call", "tool": "check_job_status", "job_id": "f87be7a5-4dde-4a21-a780-4e96cfed8daf", "status": "complete", "ts": "2026-06-14T18:22:15.408795+00:00"}
+{"event": "tool_call", "tool": "read_job_output_page", "job_id": "f87be7a5-4dde-4a21-a780-4e96cfed8daf", "page_number": 1, "total_pages": 3, "has_more": true, "ts": "2026-06-14T18:22:15.410616+00:00"}
+{"event": "tool_call", "tool": "read_job_output_page", "job_id": "f87be7a5-4dde-4a21-a780-4e96cfed8daf", "page_number": 2, "total_pages": 3, "has_more": true, "ts": "2026-06-14T18:22:15.411694+00:00"}
+{"event": "tool_call", "tool": "read_job_output_page", "job_id": "f87be7a5-4dde-4a21-a780-4e96cfed8daf", "page_number": 3, "total_pages": 3, "has_more": false, "ts": "2026-06-14T18:22:15.412719+00:00"}
+{"event": "tool_call", "tool": "launch_volatility_plugin", "job_id": "52fcc7e7-59c2-41ee-8b74-fed559ea9ae9", "image_slug": "reveal", "plugin_slug": "dlllist", "ts": "2026-06-14T18:22:15.413461+00:00"}
+{"event": "tool_call", "tool": "check_job_status", "job_id": "52fcc7e7-59c2-41ee-8b74-fed559ea9ae9", "status": "pending", "ts": "2026-06-14T18:22:15.413746+00:00"}
+{"event": "job_started", "job_id": "52fcc7e7-59c2-41ee-8b74-fed559ea9ae9", "plugin": "dlllist", "image": "reveal", "ts": "2026-06-14T18:22:15.414178+00:00"}
+{"event": "job_finished", "job_id": "52fcc7e7-59c2-41ee-8b74-fed559ea9ae9", "returncode": 0, "rows_returned": 30, "was_truncated": true, "ts": "2026-06-14T18:22:17.938613+00:00"}
+{"event": "tool_call", "tool": "check_job_status", "job_id": "52fcc7e7-59c2-41ee-8b74-fed559ea9ae9", "status": "complete", "ts": "2026-06-14T18:22:20.414326+00:00"}
+{"event": "tool_call", "tool": "read_job_output_page", "job_id": "52fcc7e7-59c2-41ee-8b74-fed559ea9ae9", "page_number": 1, "total_pages": 2, "has_more": true, "ts": "2026-06-14T18:22:20.416009+00:00"}
+{"event": "tool_call", "tool": "read_job_output_page", "job_id": "52fcc7e7-59c2-41ee-8b74-fed559ea9ae9", "page_number": 2, "total_pages": 2, "has_more": false, "ts": "2026-06-14T18:22:20.416987+00:00"}
+{"event": "tool_call", "tool": "generate_incident_report", "image_slug": "reveal", "status": "REPORT_READY", "total_jobs": 6, "ts": "2026-06-14T18:22:20.417858+00:00"}

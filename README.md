@@ -6,6 +6,8 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-green.svg)](https://www.python.org/)
 [![MCP SDK](https://img.shields.io/badge/MCP-1.9%2B-purple.svg)](https://github.com/modelcontextprotocol/python-sdk)
 
+**Demo Video:** [https://youtu.be/zaiSCVtHg7M](https://youtu.be/zaiSCVtHg7M)
+
 ---
 
 ## The Problem This Solves
@@ -626,11 +628,19 @@ This drives the real MCP server (FastMCP, async job queue, disk-backed paginatio
 
 ### 4. Sample execution trace
 
-A real JSON-RPC trace from this exact run (55 events: tool calls, job lifecycle,
+A real JSON-RPC trace from this exact run (58 events: tool calls, job lifecycle,
 pagination, and the protocol gate block/recovery cycle) is committed at
 [`docs/sample_trace.jsonl`](docs/sample_trace.jsonl). It can be replayed against
 `docs/accuracy_report.md`'s Accuracy Self-Assessment section to verify that every
 claimed finding traces back to a specific `read_job_output_page` call.
+
+[`docs/three_claim_trace.md`](docs/three_claim_trace.md) maps 5 headline findings
+from this run (orphaned parent PID 4120, hidden PowerShell PID 3692's full WebDAV
+command line, 5x RWX `malfind` regions, the live C2 connection to
+`45.9.74.32:8888`, and `dlllist` confirmation) to the exact `job_id` and
+`read_job_output_page` calls in `docs/sample_trace.jsonl` that produced each,
+including the raw Volatility output — the full case is reconstructable from these
+two files alone.
 
 ### Step 6 - Run the Forensic Triage Simulation
 
