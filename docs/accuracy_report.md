@@ -371,7 +371,7 @@ missed artifact:
   but `generate_incident_report` still returned `PROTOCOL_ERROR` because the job
   was not yet fully paged.
 - The agent paged all 4 pages of `pslist` output (see `docs/sample_trace.jsonl`,
-  `read_job_output_page` calls for job `427be361-...`) before retrying the report.
+  `read_job_output_page` calls for job `a1d22326-...`) before retrying the report.
 - `malfind`, `netscan`, and `dlllist` were each fully paged (4, 3, and 2 pages
   respectively) before `generate_incident_report` returned `REPORT_READY`.
 

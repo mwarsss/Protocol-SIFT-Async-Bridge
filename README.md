@@ -628,7 +628,7 @@ This drives the real MCP server (FastMCP, async job queue, disk-backed paginatio
 
 ### 4. Sample execution trace
 
-A real JSON-RPC trace from this exact run (58 events: tool calls, job lifecycle,
+A real JSON-RPC trace from this exact run (57 events: tool calls, job lifecycle,
 pagination, and the protocol gate block/recovery cycle) is committed at
 [`docs/sample_trace.jsonl`](docs/sample_trace.jsonl). It can be replayed against
 `docs/accuracy_report.md`'s Accuracy Self-Assessment section to verify that every

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -91,11 +92,18 @@ def run_plugin(plugin_slug: str, extra_args: list[str] | None = None):
     return job_id, status
 
 
-def page_through(job_id: str, label: str, highlight: str | None = None) -> None:
+def page_through(job_id: str, label: str, highlight: str | None = None) -> str:
+    """Page through every page of a job's output, printing as we go.
+
+    Returns the concatenated page_content across all pages so callers can
+    parse the full (untruncated) output for downstream decisions.
+    """
+    full_text_parts: list[str] = []
     page = 1
     while True:
         result = srv.read_job_output_page(job_id=job_id, page_number=page)
         content = result.get("page_content", "")
+        full_text_parts.append(content)
         has_more = result.get("has_more", False)
         total_pages = result.get("total_pages", "?")
         _log(
@@ -110,6 +118,46 @@ def page_through(job_id: str, label: str, highlight: str | None = None) -> None:
         if not has_more:
             break
         page += 1
+
+    return "\n".join(full_text_parts)
+
+
+# Interpreter / LOLBin binaries commonly abused for fileless execution. Used
+# as the heuristic to pick which child of an orphaned parent process is worth
+# a targeted follow-up (vs. a benign decoy like wordpad.exe or notepad.exe).
+_SUSPICIOUS_INTERPRETERS = {
+    "powershell.exe", "pwsh.exe", "cmd.exe", "wscript.exe", "cscript.exe",
+    "mshta.exe", "rundll32.exe", "regsvr32.exe", "certutil.exe", "wmic.exe",
+}
+
+
+def derive_target_pid(pslist_text: str, fallback: str = "3692") -> str:
+    """Pick a PID worth a targeted follow-up, from the full pslist output.
+
+    Heuristic: find "orphaned parent" PPIDs (a PPID value that does not
+    itself appear as a PID anywhere in the table — i.e. the real parent
+    process has exited/is hidden). Among that orphaned parent's children,
+    prefer one whose image name is a known scripting/LOLBin interpreter
+    (powershell.exe, rundll32.exe, etc.) over decoy applications. Falls back
+    to `fallback` if the table can't be parsed or no such child is found.
+    """
+    rows: list[tuple[str, str, str]] = []  # (pid, ppid, name)
+    for line in pslist_text.splitlines():
+        m = re.match(r"^\*?\s*(\d+)\s+(\d+)\s+(\S+)", line)
+        if m:
+            rows.append((m.group(1), m.group(2), m.group(3)))
+
+    if not rows:
+        return fallback
+
+    all_pids = {pid for pid, _, _ in rows}
+    orphaned_ppids = {ppid for _, ppid, _ in rows if ppid not in all_pids}
+
+    for pid, ppid, name in rows:
+        if ppid in orphaned_ppids and name.lower() in _SUSPICIOUS_INTERPRETERS:
+            return pid
+
+    return fallback
 
 
 def main() -> None:
@@ -131,6 +179,7 @@ def main() -> None:
     job1, p1 = run_plugin("pslist")
 
     # ── Phase 1a/1b: Protocol gate + self-correction paging ──────────────
+    target_pid = "3692"  # fallback if derivation below fails
     if p1["truncated"]:
         _banner("Phase 1a — Protocol Gate: generate_incident_report (expect BLOCKED)")
         gate = srv.generate_incident_report(image_slug="reveal")
@@ -141,26 +190,33 @@ def main() -> None:
             _log("gate result", _c(YELLOW, f"unexpected: {gate['status']}"))
 
         _banner("Phase 1b — Self-Correction: Paging Full pslist")
-        page_through(job1, "pslist", highlight="4120")
+        pslist_text = page_through(job1, "pslist", highlight="4120")
+
+        # Re-sequencing step: derive the next target PID from the just-paged
+        # pslist data instead of a fixed value, so phases 3/4/6 follow what
+        # this run actually found (an orphaned parent's interpreter child).
+        target_pid = derive_target_pid(pslist_text, fallback=target_pid)
+        _log("derived target", f"PID {_c(YELLOW, target_pid)} "
+                                f"(orphaned-parent interpreter child, or fallback)")
 
     # ── Phase 2: pstree ────────────────────────────────────────────────────
     _banner("Phase 2 — pstree (process lineage)")
 
     job2, p2 = run_plugin("pstree")
     if p2["truncated"]:
-        page_through(job2, "pstree", highlight="3692")
+        page_through(job2, "pstree", highlight=target_pid)
 
     # ── Phase 3: cmdline on hidden PowerShell ────────────────────────────
-    _banner("Phase 3 — cmdline (PID 3692 — hidden PowerShell)")
+    _banner(f"Phase 3 — cmdline (PID {target_pid} — hidden PowerShell)")
 
-    job3, p3 = run_plugin("cmdline", ["--pid", "3692"])
+    job3, p3 = run_plugin("cmdline", ["--pid", target_pid])
     if p3["truncated"]:
         page_through(job3, "cmdline")
 
     # ── Phase 4: malfind confirms process injection ─────────────────────
-    _banner("Phase 4 — malfind (PID 3692 — confirm process injection)")
+    _banner(f"Phase 4 — malfind (PID {target_pid} — confirm process injection)")
 
-    job4, p4 = run_plugin("malfind", ["--pid", "3692"])
+    job4, p4 = run_plugin("malfind", ["--pid", target_pid])
     if p4["truncated"]:
         page_through(job4, "malfind")
 
@@ -172,9 +228,9 @@ def main() -> None:
         page_through(job5, "netscan", highlight="45.9.74.32")
 
     # ── Phase 6: dlllist on hidden PowerShell ────────────────────────────
-    _banner("Phase 6 — dlllist (PID 3692 — loaded modules)")
+    _banner(f"Phase 6 — dlllist (PID {target_pid} — loaded modules)")
 
-    job6, p6 = run_plugin("dlllist", ["--pid", "3692"])
+    job6, p6 = run_plugin("dlllist", ["--pid", target_pid])
     if p6["truncated"]:
         page_through(job6, "dlllist")
 

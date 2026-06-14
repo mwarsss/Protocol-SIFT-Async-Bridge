@@ -4,7 +4,7 @@ This document maps headline findings from the final `generate_incident_report`
 output to the exact tool execution(s) in [`docs/sample_trace.jsonl`](sample_trace.jsonl)
 that produced them, plus the actual evidence text returned by Volatility for that
 job. The trace and the excerpts below come from the **same run**
-(`logs/trace_20260614_182115.jsonl`, captured 2026-06-14T18:21-18:22 UTC against
+(`logs/trace_20260614_182749.jsonl`, captured 2026-06-14T18:27-18:28 UTC against
 `cases/reveal.dmp`), so job IDs line up exactly between the two files.
 
 Use this as the audit-trail key: every claim below is `job_id -> plugin -> page(s)
@@ -17,7 +17,7 @@ in docs/sample_trace.jsonl -> raw output line`. The case is reconstructable from
 decoy `wordpad.exe` (PID 9112) and hidden `powershell.exe` (PID 3692)
 
 - **Tool execution:** `launch_volatility_plugin(image_slug="reveal", plugin_slug="pslist")`
-  -> `job_id = 427be361-b35b-42ea-a0d3-8abbf80362b6`
+  -> `job_id = a1d22326-ef0b-45e2-8ab5-1b04d2348db8`
 - **Trace events:** `job_started` / `job_finished` (`rows_returned: 30`,
   `was_truncated: true`) and 4x `read_job_output_page` (pages 1-4 of 4, all paged
   per the protocol gate)
@@ -34,9 +34,9 @@ decoy `wordpad.exe` (PID 9112) and hidden `powershell.exe` (PID 3692)
 via WebDAV/rundll32
 
 - **Tool executions:**
-  - `launch_volatility_plugin(plugin_slug="pstree")` -> `job_id = 180984c3-63cf-44bb-81df-28d56c13d07d`
+  - `launch_volatility_plugin(plugin_slug="pstree")` -> `job_id = f5de92ab-8b45-453e-91a6-1bbf295774ee`
   - `launch_volatility_plugin(plugin_slug="cmdline", extra_args=["--pid", "3692"])`
-    -> `job_id = aebafc1b-f409-416e-a32d-aef6b77b8287`
+    -> `job_id = 323e5656-77f7-49fa-b8a7-894aa50d5b91`
 - **Trace events:** `pstree` job (`rows_returned: 30`, `was_truncated: true`, 4x
   `read_job_output_page`); `cmdline --pid 3692` job (`rows_returned: 2`,
   `was_truncated: false` — small enough that no paging was needed)
@@ -59,7 +59,7 @@ via WebDAV/rundll32
 ## Claim 3 — Process injection: 5x `PAGE_EXECUTE_READWRITE` regions in PID 3692
 
 - **Tool execution:** `launch_volatility_plugin(plugin_slug="malfind", extra_args=["--pid", "3692"])`
-  -> `job_id = 2421037e-0842-41c6-b295-2c1f3c327d57`
+  -> `job_id = c935d0ef-b215-427e-b45e-b02bfffd7d8f`
 - **Trace events:** `job_finished` (`rows_returned: 30`, `was_truncated: true`,
   92 raw lines) and 4x `read_job_output_page` (pages 1-4 of 4 — fully paged before
   `generate_incident_report` was allowed to proceed)
@@ -78,7 +78,7 @@ via WebDAV/rundll32
 ## Claim 4 — Live C2 connection: PID 2416 (`net.exe`) ESTABLISHED to `45.9.74.32:8888`
 
 - **Tool execution:** `launch_volatility_plugin(plugin_slug="netscan")`
-  -> `job_id = f87be7a5-4dde-4a21-a780-4e96cfed8daf`
+  -> `job_id = eb81ee49-0e83-4820-a043-134f950d87cb`
 - **Trace events:** `job_finished` (`rows_returned: 30`, `was_truncated: true`) and
   3x `read_job_output_page` (pages 1-3 of 3, fully paged)
 - **Raw output (page 2 of 3):**
@@ -93,7 +93,7 @@ via WebDAV/rundll32
 (not a renamed/spoofed binary)
 
 - **Tool execution:** `launch_volatility_plugin(plugin_slug="dlllist", extra_args=["--pid", "3692"])`
-  -> `job_id = 52fcc7e7-59c2-41ee-8b74-fed559ea9ae9`
+  -> `job_id = 9b090067-9e25-4ae1-8b6f-25b3748c4dd4`
 - **Trace events:** `job_finished` (`rows_returned: 30`, `was_truncated: true`, 61
   raw lines) and 2x `read_job_output_page` (pages 1-2 of 2, fully paged)
 - **Raw output (page 1 of 2):**
@@ -111,6 +111,6 @@ via WebDAV/rundll32
 `generate_incident_report(image_slug="reveal")` -> `status: REPORT_READY`,
 `total_jobs: 6`. All 6 jobs (`pslist`, `pstree`, `cmdline`, `malfind`, `netscan`,
 `dlllist`) report `fully_explored: true` — the protocol gate's `PROTOCOL_ERROR`
-on the initial `pslist` (see `docs/sample_trace.jsonl`, event 9: `"blocked_by":
-"427be361-..."`) was cleared only after every truncated job was fully paged, per
+on the initial `pslist` (see `docs/sample_trace.jsonl`, event 8: `"blocked_by":
+"a1d22326-..."`) was cleared only after every truncated job was fully paged, per
 `generate_incident_report`'s gate logic in `server/mcp_vol_server.py`.
