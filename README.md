@@ -594,7 +594,7 @@ This project was verified end-to-end against **CyberDefenders' "Reveal" lab** - 
 
 ### 1. Get the evidence
 
-Download the **"Reveal"** memory image from [CyberDefenders](https://cyberdefenders.org/) (free registration required - search their lab catalog for "Reveal"). Place the extracted `.dmp`/`.raw` file at:
+Download the **"Reveal"** memory image from [CyberDefenders](https://cyberdefenders.org/blueteam-ctf-challenges/reveal/) (free registration required). Place the extracted `.dmp`/`.raw` file at:
 
 ```bash
 mkdir -p cases
