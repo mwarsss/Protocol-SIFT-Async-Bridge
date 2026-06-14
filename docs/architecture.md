@@ -3,6 +3,26 @@
 This document defines the three trust zones of the system and shows exactly which
 data crosses each boundary, in which direction, and under what validation.
 
+## Architectural Pattern
+
+This project implements the **Custom MCP Server** pattern: a purpose-built FastMCP
+server exposes a small, type-safe set of forensic tools (8 total — see "MCP Tool
+Reference" in `README.md`) to any MCP-compatible LLM client, rather than wrapping a
+generic shell or extending an existing agent framework.
+
+## Architectural Guardrails vs. Prompt Guardrails
+
+Every control on this page is an **architectural guardrail** — enforced in code, at
+the protocol/process boundary, independent of what the LLM is told in its system
+prompt. None of the rows in "What CANNOT Happen" below rely on the model choosing to
+behave; they hold even if the model is adversarial or malfunctioning, because the
+corresponding *capability does not exist* in the tool surface (no write tool, no
+shell-exec tool, no arbitrary-path tool). This is the opposite of a prompt-based
+restriction such as "please don't write to the evidence file" — see
+`docs/accuracy_report.md` → "Accuracy Self-Assessment" → "Evidence Integrity" for
+the explicit no-op trace of what happens if the model attempts to ignore a
+restriction anyway.
+
 ---
 
 ## Trust Zone Map (Mermaid — renders on GitHub)
